@@ -1,0 +1,10 @@
+pyproject.toml
+src/mcp_details/__init__.py
+src/mcp_details/profiles.py
+src/mcp_details.egg-info/PKG-INFO
+src/mcp_details.egg-info/SOURCES.txt
+src/mcp_details.egg-info/dependency_links.txt
+src/mcp_details.egg-info/requires.txt
+src/mcp_details.egg-info/top_level.txt
+tests/test_package_import.py
+tests/test_profiles.py

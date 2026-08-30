@@ -1,0 +1,106 @@
+# Part 2A — Minimal Project Skeleton and Profile Model First Milestone
+
+We are continuing my **MCP Details Learning Project**.
+
+Part 1 — Architecture Foundation is complete.
+
+Please use the attached project context files as the authoritative basis for this conversation:
+
+* `MCP_DETAILS_PROJECT_CONTEXT.md`
+* `Part_1_Completion_Note.md`
+* `PART2_CONTEXT_20260830.md`
+* `ARCHITECTURAL_DECISION_LEDGER.md`, if available
+
+We are now transitioning from broad architecture review to controlled incremental implementation.
+
+## Part 2A objective
+
+Establish the smallest useful project skeleton and the first project-owned connection-profile model, beginning with STDIO.
+
+Do **not** attempt to build the complete MCP Details application.
+
+Before proposing any production code:
+
+1. Review the attached Part 1 completion and Part 2 context.
+2. Review the actual current project/repository structure that I provide.
+3. Review `pyproject.toml`, dependency declarations, existing package files, and tests if they exist.
+4. Do not assume files or package structure that have not been confirmed.
+5. Confirm the exact responsibility of the initial `profiles` boundary.
+6. Confirm the smallest useful first STDIO profile contract.
+7. Distinguish architectural decisions from implementation details.
+8. Recommend the smallest safe first implementation milestone.
+9. Stop for my approval before implementing it.
+
+The current conceptual STDIO profile fields are:
+
+* `display_name`
+* explicit STDIO transport identity
+* `command`
+* `args`
+* optional `cwd`
+
+Environment and credential-reference support is architecturally expected, but do not bundle it into the first implementation merely for completeness. Introduce it later as its own small milestone unless concrete implementation evidence shows otherwise.
+
+## Established architecture
+
+Continue respecting these Part 1 decisions:
+
+* Target MCP Python SDK 2.x.
+* Use the v2 high-level `Client` as the primary MCP client boundary.
+* Delegate modern/legacy MCP protocol negotiation to the SDK.
+* Use explicit resolved connection profiles.
+* Keep profiles project-owned rather than using SDK transport objects as the project configuration model.
+* Keep STDIO and Streamable HTTP configuration structurally distinct.
+* Keep inspection transport-neutral after connection.
+* Maintain strict non-executing capability inspection.
+* Do not call tools, read resource contents, or get/render prompts during normal inspection.
+* Respect advertised server capabilities.
+* Exhaust pagination for complete inventory.
+* Preserve partial inspection evidence.
+* Keep inspection separate from presentation.
+* Use SDK semantic models directly where appropriate rather than cloning the MCP type system.
+* Avoid speculative wrappers, factories, adapters, workflow modules, pagination frameworks, and other abstractions until concrete evidence justifies them.
+
+## Teaching and implementation contract
+
+Continue using the same method:
+
+* architecture before implementation
+* professor/software-architect teaching style
+* extremely small, highly testable milestones
+* explain the architectural responsibility before code
+* preserve established boundaries
+* compile after every implementation change
+* run the focused test after every milestone
+* run the full regression suite after every milestone
+* stop after every checkpoint
+* separate architectural decisions from implementation
+* do not proceed automatically to the next milestone
+
+Use this rhythm:
+
+ONE ARCHITECTURAL DECISION
+
+↓
+
+ONE SMALL IMPLEMENTATION
+
+↓
+
+COMPILE
+
+↓
+
+FOCUSED TEST
+
+↓
+
+FULL REGRESSION
+
+↓
+
+STOP / CHECKPOINT
+
+Begin with the **Part 2A repository and package baseline review only**.
+
+Do not write production code yet.
