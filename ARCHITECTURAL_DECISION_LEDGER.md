@@ -626,3 +626,4 @@ inspection
 rendering
 
 without owning transport mechanics, inspection policy, or presentation details.
+.
