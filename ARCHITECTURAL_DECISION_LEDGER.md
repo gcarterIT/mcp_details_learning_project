@@ -627,3 +627,47 @@ rendering
 
 without owning transport mechanics, inspection policy, or presentation details.
 .
+
+## 9/3/26 12:00 am update
+## ----------------------
+
+## AD-048 — Shared Private Pagination Mechanics for Inspection Categories
+
+### Context
+
+Complete tools inspection and static resources inspection now demonstrate the same pagination and failure-classification mechanics:
+
+- make the initial list request without a cursor argument
+- preserve each successful SDK result page
+- continue while `next_cursor is not None`
+- pass continuation cursors back unchanged
+- return `SUCCESS` when pagination completes
+- return `FAILED` when the first request fails
+- return `PARTIAL` when a later request fails
+- preserve the original exception object
+
+However, capability gating and SDK method selection remain category-specific.
+
+### Decision
+
+Extract the repeated pagination and failure-classification mechanics into a private helper within the inspection module.
+
+Keep the semantic inspection operations explicit:
+
+- `inspect_tools()`
+- `inspect_resources()`
+
+The private helper will receive the appropriate SDK list callable rather than an `InspectionCategory`.
+
+`NOT_ADVERTISED` remains the responsibility of the category-specific inspection functions and is not handled by the pagination helper.
+
+The helper is an internal implementation mechanism and is not part of the public MCP Details inspection API.
+
+### Consequences
+
+- Tools and resources retain clear semantic entry points.
+- Capability policy remains explicit and category-specific.
+- Shared pagination behavior has one implementation.
+- Existing tools and resources tests protect the helper indirectly.
+- No separate pagination module, pagination class hierarchy, generic category dispatcher, or public paginator API is introduced.
+- Future categories may reuse the helper only if their concrete SDK behavior satisfies the same pagination contract.

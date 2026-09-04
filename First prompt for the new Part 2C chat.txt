@@ -1,0 +1,90 @@
+# Part 2C — Inspection Boundary Architectural Review
+
+We are continuing my **MCP Details Learning Project**.
+
+Parts 1, 2A, and 2B are complete.
+
+Please use the attached project context files as the authoritative basis for
+this conversation:
+
+- `MCP_DETAILS_PROJECT_CONTEXT.md`
+- `Part_1_Completion_Note.md`
+- `PART2_CONTEXT_20260830.md`
+- `Part_2B_Completion_Note.md`
+- `PART2C_CONTEXT_20260830.md`
+- `ARCHITECTURAL_DECISION_LEDGER.md`, if available
+
+The current regression baseline is **15 passing tests**.
+
+The minimal STDIO path has now been proven through a real integration test:
+
+StdioConnectionProfile
+        ↓
+build_stdio_server_parameters()
+        ↓
+StdioServerParameters
+        ↓
+high-level MCP SDK Client
+        ↓
+real STDIO subprocess
+        ↓
+MCP negotiation
+        ↓
+connected Client
+
+We are now moving from the **connection boundary** to the **inspection
+boundary**.
+
+## Part 2C objective
+
+Determine the smallest correct, transport-neutral inspection architecture for
+an already-connected high-level MCP SDK v2 Client.
+
+Before proposing any production code:
+
+1. Review the attached architecture and completion context.
+2. Treat the existing Part 2B connection boundary as closed unless the
+   inspection review exposes a genuine architectural problem.
+3. Review the current MCP Python SDK **2.1.1** high-level Client inspection
+   API rather than assuming behavior from MCP SDK v1.x or the previous MCP
+   Client Learning Project.
+4. Identify what negotiated server metadata is directly available from the
+   connected Client.
+5. Review the current SDK behavior and return types for:
+   - `list_tools()`
+   - `list_resources()`
+   - `list_resource_templates()`
+   - `list_prompts()`
+6. Determine how negotiated server capabilities should influence discovery.
+7. Determine exactly how pagination works in the current SDK and what MCP
+   Details must do to guarantee pagination-complete inspection.
+8. Preserve the project's strict non-execution policy:
+   - discovery/list operations are allowed,
+   - `call_tool()`, `read_resource()`, and `get_prompt()` are prohibited.
+9. Determine what inspection behavior should remain SDK-owned versus
+   project-owned.
+10. Determine the smallest project-owned structured result/DTO boundary needed
+    for the first inspection milestone.
+11. Consider the Part 1 requirement to preserve partial authoritative evidence
+    when later inspection operations fail.
+12. Do not create capability-specific workflow modules.
+13. Do not begin by implementing the complete inspection subsystem.
+14. Recommend the smallest safe first implementation milestone only after the
+    architectural review.
+
+Continue using the same teaching contract:
+
+- architecture before implementation
+- professor/software-architect style
+- explain why before code
+- extremely small, highly testable milestones
+- preserve intended behavior exactly
+- compile after every implementation
+- run focused tests and the full regression suite after every milestone
+- stop after every checkpoint
+- separate architectural decisions from implementation
+- avoid speculative abstractions
+
+Begin with the **Part 2C inspection boundary architectural review**.
+
+Do not write production code yet.

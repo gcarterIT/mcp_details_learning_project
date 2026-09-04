@@ -7,6 +7,7 @@ import pytest
 from mcp import Client
 
 from mcp_details.connection import build_stdio_server_parameters
+from mcp_details.inspection import inspect_server_description
 from mcp_details.profiles import StdioConnectionProfile
 
 
@@ -33,7 +34,20 @@ async def test_stdio_profile_can_connect_to_real_mcp_server() -> None:
     parameters = build_stdio_server_parameters(profile)
 
     async with Client(parameters) as client:
+        # First, confirm the real MCP connection and negotiation succeeded.
         assert client.server_info is not None
         assert client.server_info.name == "mcp-details-test-server"
         assert client.protocol_version is not None
         assert client.server_capabilities is not None
+
+        # Then pass the already-connected Client into the new
+        # transport-neutral inspection boundary.
+        description = inspect_server_description(client)
+
+        # Confirm that inspection preserves the negotiated server evidence.
+        assert description.server_info is client.server_info
+        assert description.server_info.name == "mcp-details-test-server"
+        assert description.protocol_version == client.protocol_version
+        assert description.server_capabilities is client.server_capabilities
+        assert description.instructions == client.instructions
+
