@@ -5,8 +5,11 @@ from enum import Enum
 from typing import Protocol, TypeVar
 
 from mcp import Client
+
 from mcp.types import (
+    ListPromptsResult,
     ListResourcesResult,
+    ListResourceTemplatesResult,
     ListToolsResult,
     ServerCapabilities,
 )
@@ -135,3 +138,35 @@ async def inspect_resources(
         )
 
     return await _inspect_paginated_pages(client.list_resources)
+
+async def inspect_resource_templates(
+    client: Client,
+) -> CategoryInspection[ListResourceTemplatesResult]:
+    """Inspect all advertised resource templates while preserving partial evidence."""
+
+    if not is_category_advertised(
+        client.server_capabilities,
+        InspectionCategory.RESOURCE_TEMPLATES,
+    ):
+        return CategoryInspection(
+            status=InspectionStatus.NOT_ADVERTISED,
+            pages=(),
+        )
+
+    return await _inspect_paginated_pages(client.list_resource_templates)
+    
+async def inspect_prompts(
+    client: Client,
+) -> CategoryInspection[ListPromptsResult]:
+    """Inspect all advertised prompts while preserving partial evidence."""
+
+    if not is_category_advertised(
+        client.server_capabilities,
+        InspectionCategory.PROMPTS,
+    ):
+        return CategoryInspection(
+            status=InspectionStatus.NOT_ADVERTISED,
+            pages=(),
+        )
+
+    return await _inspect_paginated_pages(client.list_prompts)
