@@ -17,6 +17,7 @@ from mcp.types import (
 from mcp_details.results import (
     CategoryInspection,
     InspectionStatus,
+    MCPInspectionResult,
     ServerDescription,
 )
 
@@ -170,3 +171,21 @@ async def inspect_prompts(
         )
 
     return await _inspect_paginated_pages(client.list_prompts)
+    
+async def inspect_mcp(client: Client) -> MCPInspectionResult:
+    """Inspect one already-connected MCP server completely."""
+
+    server_description = inspect_server_description(client)
+
+    tools = await inspect_tools(client)
+    resources = await inspect_resources(client)
+    resource_templates = await inspect_resource_templates(client)
+    prompts = await inspect_prompts(client)
+
+    return MCPInspectionResult(
+        server_description=server_description,
+        tools=tools,
+        resources=resources,
+        resource_templates=resource_templates,
+        prompts=prompts,
+    )

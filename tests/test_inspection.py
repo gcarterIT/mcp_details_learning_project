@@ -21,6 +21,7 @@ from mcp_details.inspection import (
     inspect_server_description,
     inspect_tools,
     inspect_prompts,
+    inspect_mcp,
     is_category_advertised,
 )
 
@@ -874,3 +875,206 @@ async def test_inspect_prompts_reports_failed_when_first_page_fails() -> None:
     assert result.failure is failure
 
     client.list_prompts.assert_awaited_once_with()
+    
+    
+@pytest.mark.anyio
+async def test_inspect_mcp_returns_complete_aggregate_result() -> None:
+    """Complete inspection preserves server and primitive inspection evidence."""
+
+    capabilities = ServerCapabilities(
+        tools=ToolsCapability(),
+        resources=ResourcesCapability(),
+        prompts=PromptsCapability(),
+    )
+
+    tools_page = ListToolsResult(
+        tools=[],
+        next_cursor=None,
+    )
+
+    resources_page = ListResourcesResult(
+        resources=[],
+        next_cursor=None,
+    )
+
+    resource_templates_page = ListResourceTemplatesResult(
+        resourceTemplates=[],
+        next_cursor=None,
+    )
+
+    prompts_page = ListPromptsResult(
+        prompts=[],
+        next_cursor=None,
+    )
+
+    client = SimpleNamespace(
+        protocol_version="2025-11-25",
+        server_info=None,
+        server_capabilities=capabilities,
+        instructions=None,
+        list_tools=AsyncMock(return_value=tools_page),
+        list_resources=AsyncMock(return_value=resources_page),
+        list_resource_templates=AsyncMock(
+            return_value=resource_templates_page,
+        ),
+        list_prompts=AsyncMock(return_value=prompts_page),
+    )
+
+    result = await inspect_mcp(client)
+
+    assert result.server_description.protocol_version == "2025-11-25"
+    assert result.server_description.server_capabilities is capabilities
+
+    assert result.tools.status is InspectionStatus.SUCCESS
+    assert result.tools.pages == (tools_page,)
+
+    assert result.resources.status is InspectionStatus.SUCCESS
+    assert result.resources.pages == (resources_page,)
+
+    assert result.resource_templates.status is InspectionStatus.SUCCESS
+    assert result.resource_templates.pages == (resource_templates_page,)
+
+    assert result.prompts.status is InspectionStatus.SUCCESS
+    assert result.prompts.pages == (prompts_page,)
+    
+@pytest.mark.anyio
+async def test_inspect_mcp_continues_after_category_failure() -> None:
+    """Failure in one primitive category does not suppress later inspection."""
+
+    capabilities = ServerCapabilities(
+        tools=ToolsCapability(),
+        resources=ResourcesCapability(),
+        prompts=PromptsCapability(),
+    )
+
+    tools_failure = RuntimeError("tools inspection failed")
+
+    resources_page = ListResourcesResult(
+        resources=[],
+        next_cursor=None,
+    )
+
+    resource_templates_page = ListResourceTemplatesResult(
+        resourceTemplates=[],
+        next_cursor=None,
+    )
+
+    prompts_page = ListPromptsResult(
+        prompts=[],
+        next_cursor=None,
+    )
+
+    client = SimpleNamespace(
+        protocol_version="2025-11-25",
+        server_info=None,
+        server_capabilities=capabilities,
+        instructions=None,
+        list_tools=AsyncMock(side_effect=tools_failure),
+        list_resources=AsyncMock(return_value=resources_page),
+        list_resource_templates=AsyncMock(
+            return_value=resource_templates_page,
+        ),
+        list_prompts=AsyncMock(return_value=prompts_page),
+    )
+
+    result = await inspect_mcp(client)
+
+    assert result.tools.status is InspectionStatus.FAILED
+    assert result.tools.pages == ()
+    assert result.tools.failure is tools_failure
+
+    assert result.resources.status is InspectionStatus.SUCCESS
+    assert result.resource_templates.status is InspectionStatus.SUCCESS
+    assert result.prompts.status is InspectionStatus.SUCCESS
+
+    client.list_resources.assert_awaited_once_with()
+    client.list_resource_templates.assert_awaited_once_with()
+    client.list_prompts.assert_awaited_once_with()
+
+@pytest.mark.anyio
+async def test_inspect_mcp_resource_failure_does_not_suppress_templates() -> None:
+    """Static-resource failure does not suppress resource-template inspection."""
+
+    capabilities = ServerCapabilities(
+        resources=ResourcesCapability(),
+    )
+
+    resources_failure = RuntimeError("resources failed")
+
+    resource_templates_page = ListResourceTemplatesResult(
+        resourceTemplates=[],
+        next_cursor=None,
+    )
+
+    client = SimpleNamespace(
+        protocol_version="2025-11-25",
+        server_info=None,
+        server_capabilities=capabilities,
+        instructions=None,
+        list_tools=AsyncMock(),
+        list_resources=AsyncMock(side_effect=resources_failure),
+        list_resource_templates=AsyncMock(
+            return_value=resource_templates_page,
+        ),
+        list_prompts=AsyncMock(),
+    )
+
+    result = await inspect_mcp(client)
+
+    assert result.tools.status is InspectionStatus.NOT_ADVERTISED
+
+    assert result.resources.status is InspectionStatus.FAILED
+    assert result.resources.failure is resources_failure
+
+    assert result.resource_templates.status is InspectionStatus.SUCCESS
+    assert result.resource_templates.pages == (
+        resource_templates_page,
+    )
+
+    assert result.prompts.status is InspectionStatus.NOT_ADVERTISED
+
+    client.list_resource_templates.assert_awaited_once_with()
+    
+@pytest.mark.anyio
+async def test_inspect_mcp_preserves_partial_category_evidence() -> None:
+    """Partial primitive evidence survives complete inspection aggregation."""
+
+    capabilities = ServerCapabilities(
+        tools=ToolsCapability(),
+    )
+
+    first_tools_page = ListToolsResult(
+        tools=[],
+        next_cursor="cursor-2",
+    )
+
+    tools_failure = RuntimeError("second tools page failed")
+
+    client = SimpleNamespace(
+        protocol_version="2025-11-25",
+        server_info=None,
+        server_capabilities=capabilities,
+        instructions=None,
+        list_tools=AsyncMock(
+            side_effect=[
+                first_tools_page,
+                tools_failure,
+            ]
+        ),
+        list_resources=AsyncMock(),
+        list_resource_templates=AsyncMock(),
+        list_prompts=AsyncMock(),
+    )
+
+    result = await inspect_mcp(client)
+
+    assert result.tools.status is InspectionStatus.PARTIAL
+    assert result.tools.pages == (first_tools_page,)
+    assert result.tools.pages[0] is first_tools_page
+    assert result.tools.failure is tools_failure
+
+    assert result.resources.status is InspectionStatus.NOT_ADVERTISED
+    assert result.resource_templates.status is InspectionStatus.NOT_ADVERTISED
+    assert result.prompts.status is InspectionStatus.NOT_ADVERTISED
+    
+

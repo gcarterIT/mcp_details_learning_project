@@ -671,3 +671,223 @@ The helper is an internal implementation mechanism and is not part of the public
 - Existing tools and resources tests protect the helper indirectly.
 - No separate pagination module, pagination class hierarchy, generic category dispatcher, or public paginator API is introduced.
 - Future categories may reuse the helper only if their concrete SDK behavior satisfies the same pagination contract.
+
+
+
+## 9/5/26 10:00 pm update
+## -----------------------
+
+## AD-026 — Extension
+
+Aggregate Inspection Preserves Established Evidence Directly
+
+MCPInspectionResult stores ServerDescription plus the four independent
+CategoryInspection results directly. It does not flatten SDK result pages
+or duplicate primitive inspection state.
+
+
+Aggregate Status Is Not Stored Initially
+
+MCPInspectionResult does not contain an independently stored overall status.
+Any future aggregate summary state should preferably be derived from the
+authoritative primitive-category results.
+
+
+Complete Inspection Owns Primitive Failure Isolation
+
+After server description is available, a FAILED or PARTIAL primitive
+inspection result does not suppress inspection of the remaining primitive
+categories.
+
+
+Initial Complete Inspection Is Sequential
+
+Complete inspection initially invokes primitive inspection operations
+sequentially. Exact primitive invocation order is not a public contract.
+Concurrency may be reconsidered only if demonstrated need and Client/server
+behavior justify it.
+
+
+Server-Description Failure Is Not Normalized Into Category State
+
+Unexpected failure while obtaining required server-description evidence
+propagates rather than producing a synthetic primitive-category or aggregate
+failure result.
+
+
+Aggregate Result and Orchestration Remain in Existing Modules
+
+MCPInspectionResult belongs in results.py and inspect_mcp() belongs in
+inspection.py. No additional orchestration/service module is justified yet.
+
+## 9/8/26 8:33 pm update
+## ---------------------
+
+## AD-032 — Aggregate Inspection Preserves Established Evidence Directly
+
+**Status:** Accepted
+
+**Decision**
+
+`MCPInspectionResult` is the project-owned aggregate result for one complete MCP inspection.
+
+It directly preserves:
+
+- `ServerDescription`
+- `CategoryInspection[ListToolsResult]`
+- `CategoryInspection[ListResourcesResult]`
+- `CategoryInspection[ListResourceTemplatesResult]`
+- `CategoryInspection[ListPromptsResult]`
+
+The aggregate does not flatten SDK result pages, replace the primitive category results with alternate representations, or duplicate primitive inspection state.
+
+**Rationale**
+
+The primitive inspection boundary already preserves authoritative project state and SDK semantic evidence. The aggregate should compose those established results rather than reinterpret them.
+
+This preserves:
+
+- independent category status,
+- successful and partial page evidence,
+- original failures,
+- SDK semantic result objects,
+- pagination evidence,
+- future SDK fields.
+
+Presentation-specific flattening or normalization remains downstream.
+
+---
+
+## AD-033 — Aggregate Inspection Status Is Not Stored Initially
+
+**Status:** Accepted
+
+**Decision**
+
+`MCPInspectionResult` does not initially store an independent overall inspection status such as `SUCCESS`, `PARTIAL`, or `FAILED`.
+
+Any future overall summary state should preferably be derived from the authoritative primitive-category results when a concrete consumer requires it.
+
+**Rationale**
+
+The category results already contain the authoritative inspection states.
+
+Storing an additional aggregate status would duplicate derived truth and could allow contradictory state such as an aggregate marked successful while one primitive category is failed.
+
+This follows the project principle that derived truths should preferably be computed from authoritative stored facts rather than independently stored.
+
+---
+
+## AD-034 — Complete Inspection Orchestration Owns Primitive Failure Isolation
+
+**Status:** Accepted
+
+**Decision**
+
+`inspect_mcp(client)` coordinates complete inspection of an already-connected MCP SDK `Client`.
+
+After server-description evidence is successfully established, a `FAILED` or `PARTIAL` result from one primitive category does not suppress inspection of the remaining primitive categories.
+
+Primitive inspection functions remain responsible for converting expected list-operation failures into `CategoryInspection` state.
+
+The aggregate orchestrator preserves those results and continues.
+
+**Rationale**
+
+Tools, resources, resource templates, and prompts are independently useful inspection categories.
+
+Failure of one category must not discard discoverable evidence from another category.
+
+The orchestrator does not introduce a second exception-normalization layer or blanket-catch programming errors.
+
+---
+
+## AD-035 — Initial Complete Inspection Is Sequential
+
+**Status:** Accepted
+
+**Decision**
+
+The initial implementation of `inspect_mcp(client)` invokes the established inspection operations sequentially.
+
+The current implementation is conceptually:
+
+1. inspect server description,
+2. inspect tools,
+3. inspect resources,
+4. inspect resource templates,
+5. inspect prompts,
+6. construct `MCPInspectionResult`.
+
+The exact primitive-category invocation order is not a public architectural contract.
+
+Concurrency may be reconsidered later only if a demonstrated performance need and sufficient MCP SDK/server behavior evidence justify it.
+
+**Rationale**
+
+Sequential orchestration is the smallest understandable implementation and avoids introducing unsupported assumptions about:
+
+- concurrent use of one MCP `Client`,
+- server request concurrency,
+- cancellation behavior,
+- concurrent failure aggregation,
+- nondeterministic diagnostics.
+
+No demonstrated requirement currently justifies that complexity.
+
+---
+
+## AD-036 — Server-Description Failure Is Not Normalized Into Primitive Category State
+
+**Status:** Accepted
+
+**Decision**
+
+Unexpected failure while establishing the required `ServerDescription` for a supposedly already-connected client propagates normally.
+
+The project does not currently introduce:
+
+- `ServerDescriptionInspection`,
+- a synthetic aggregate failure object,
+- synthetic `FAILED` primitive results for categories that were never meaningfully inspected.
+
+**Rationale**
+
+Server-description evidence and primitive list operations have different semantics.
+
+Primitive categories represent independently attempted discovery operations and therefore have structured inspection state.
+
+Server description is currently obtained from the negotiated state of an already-connected client.
+
+No concrete failure case currently justifies introducing another result-state abstraction.
+
+---
+
+## AD-037 — Aggregate Result and Orchestration Remain in Existing Inspection Modules
+
+**Status:** Accepted
+
+**Decision**
+
+`MCPInspectionResult` remains in:
+
+`src/mcp_details/results.py`
+
+and complete inspection orchestration remains in:
+
+`src/mcp_details/inspection.py`
+
+through:
+
+`inspect_mcp(client)`.
+
+No separate `orchestrator.py`, `service.py`, `aggregate.py`, registry, dispatcher, or inspection-service class is introduced.
+
+**Rationale**
+
+The existing modules already have clear responsibilities:
+
+- `results.py` owns project-owned inspection result semantics.
+- `inspection.py` owns inspection policy over an already-connected client.
+
+A new module or service object would currently add indirection without introducing a distinct responsibility.

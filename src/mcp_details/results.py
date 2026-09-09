@@ -10,6 +10,15 @@ from mcp.types import Implementation, ServerCapabilities
 
 PageT = TypeVar("PageT")
 
+@dataclass(frozen=True)
+class ServerDescription:
+    """Negotiated descriptive information about an MCP server."""
+
+    protocol_version: str
+    server_info: Implementation | None
+    server_capabilities: ServerCapabilities
+    instructions: str | None
+
 
 class InspectionStatus(Enum):
     """Completion state for one MCP inspection category."""
@@ -29,12 +38,17 @@ class CategoryInspection(Generic[PageT]):
     failure: Exception | None = None
 
 
+from mcp.types import (
+    ListPromptsResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
+    ListToolsResult,
+)
+
 @dataclass(frozen=True)
-class ServerDescription:
-    """Negotiated descriptive information about an MCP server."""
-
-    protocol_version: str
-    server_info: Implementation | None
-    server_capabilities: ServerCapabilities
-    instructions: str | None
-
+class MCPInspectionResult:
+    server_description: ServerDescription
+    tools: CategoryInspection[ListToolsResult]
+    resources: CategoryInspection[ListResourcesResult]
+    resource_templates: CategoryInspection[ListResourceTemplatesResult]
+    prompts: CategoryInspection[ListPromptsResult]

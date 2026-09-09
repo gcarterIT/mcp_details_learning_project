@@ -1,0 +1,125 @@
+# Part 2C.11 — Aggregate Inspection Result and Orchestration Boundary Review
+
+We are continuing my MCP Details Learning Project.
+
+The primitive inspection boundary through Part 2C.10B is complete.
+
+Please use the attached project context files as the authoritative basis for
+this conversation, especially:
+
+* MCP_DETAILS_PROJECT_CONTEXT.md
+* ARCHITECTURAL_DECISION_LEDGER.md
+* Part_1_Completion_Note.md
+* Part_2B_Completion_Note.md
+* PART2C_AGGREGATE_INSPECTION_CONTEXT_20260904.md
+
+The current architecture already supports transport-neutral inspection of an
+already-connected high-level MCP SDK v2 Client for:
+
+* server description
+* tools
+* static resources
+* resource templates
+* prompts
+
+The four primitive list categories use explicit semantic inspection functions
+and share a private pagination helper.
+
+Primitive category inspection is now architecturally closed.
+
+We are now beginning:
+
+**Part 2C.11 — Aggregate Inspection Result and Orchestration Boundary Review**
+
+Before proposing any production code:
+
+1. Review the completed architecture through Part 2C.10B.
+
+2. Confirm whether the previously anticipated project-owned aggregate result,
+   conceptually named `MCPInspectionResult`, is now justified.
+
+3. Determine the smallest correct responsibility for that aggregate result.
+
+4. Determine exactly which authoritative evidence it should contain.
+
+5. Review whether it should directly preserve:
+
+   * `ServerDescription`
+   * `CategoryInspection[ListToolsResult]`
+   * `CategoryInspection[ListResourcesResult]`
+   * `CategoryInspection[ListResourceTemplatesResult]`
+   * `CategoryInspection[ListPromptsResult]`
+
+6. Determine whether an aggregate-level inspection status is genuinely needed.
+
+7. If an aggregate status is considered, distinguish stored authoritative
+   state from state that can be derived from the individual category results.
+
+8. Determine the correct responsibility and API shape for a complete
+   inspection orchestration operation over an already-connected Client.
+
+9. Determine whether `inspect_server_description()` belongs inside that
+   complete orchestration operation.
+
+10. Review whether primitive category inspection should initially execute
+    sequentially or concurrently.
+
+11. Do not assume concurrency is preferable. Review high-level Client behavior,
+    server implications, failure isolation, determinism, testing complexity,
+    diagnostic clarity, and the learning-project goal before deciding.
+
+12. Define the exact failure-isolation contract.
+
+    In particular, determine how the architecture guarantees that:
+
+    * tools failure does not suppress resources
+    * resources failure does not suppress resource templates
+    * resource-template failure does not suppress prompts
+    * successful and partial evidence from every attempted category survives
+
+13. Review whether there are any genuine orchestration-level exceptions that
+    cannot already be represented by the primitive `CategoryInspection`
+    results.
+
+14. Review whether server-description retrieval needs its own failure
+    representation under the already-connected Client contract.
+
+15. Determine whether invocation order is part of the architectural contract
+    or merely an implementation detail.
+
+16. Confirm that aggregation remains presentation-independent.
+
+17. Review whether the aggregate result belongs in `results.py` and the
+    orchestration operation belongs in `inspection.py`, or whether a genuinely
+    new module responsibility has emerged.
+
+18. Do not introduce a new module merely for organizational preference.
+
+19. Identify which aggregate/orchestration contracts are genuinely high-value
+    enough to protect directly with regression tests.
+
+20. Identify any genuinely new architectural decision that should be recorded
+    in `ARCHITECTURAL_DECISION_LEDGER.md`.
+
+21. Recommend the smallest safe first implementation milestone.
+
+Continue using the established teaching contract:
+
+* architecture before implementation
+* professor/software-architect style
+* explain why before code
+* extremely small, highly testable milestones
+* preserve behavior exactly
+* compile after every implementation
+* run focused tests after every implementation
+* run the full regression suite after every milestone
+* stop after every checkpoint
+* separate architectural decisions from implementation
+* distinguish high-value architectural contracts from low-value edge cases
+* avoid speculative abstractions
+
+Do not begin coding until the Part 2C.11 architectural review is complete.
+
+Do not redesign the completed primitive inspection functions, shared pagination
+helper, capability policy, or CategoryInspection model unless concrete new
+evidence demonstrates a real problem.
