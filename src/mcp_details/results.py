@@ -52,3 +52,18 @@ class MCPInspectionResult:
     resources: CategoryInspection[ListResourcesResult]
     resource_templates: CategoryInspection[ListResourceTemplatesResult]
     prompts: CategoryInspection[ListPromptsResult]
+
+@dataclass(frozen=True)
+class InspectionTargetSummary:
+    """Safe project-owned identity for the target being inspected."""
+
+    display_name: str
+    transport: str
+
+
+@dataclass(frozen=True)
+class ApplicationInspectionResult:
+    """Complete application result for one inspected MCP target."""
+
+    target: InspectionTargetSummary
+    inspection: MCPInspectionResult

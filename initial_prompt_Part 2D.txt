@@ -1,0 +1,117 @@
+# Part 2D — Complete Application Composition Boundary Review
+
+We are continuing my **MCP Details Learning Project**.
+
+Part 2C — Transport-Neutral Inspection Boundary is complete.
+
+Please use the attached project context files as the authoritative basis for this conversation:
+
+* `MCP_DETAILS_PROJECT_CONTEXT.md`
+* `Part_1_Completion_Note.md`
+* `PART2_CONTEXT_20260830.md`
+* `Part_2B_Completion_Note.md`
+* `Part_2C_Completion_Note.md`
+* `PART2D_CONTEXT_20260908.md`
+* `ARCHITECTURAL_DECISION_LEDGER.md`
+
+The current project has independently established:
+
+```text
+ConnectionProfile
+      ↓
+connection boundary
+      ↓
+connected MCP SDK Client
+```
+
+and:
+
+```text
+connected MCP SDK Client
+      ↓
+inspect_mcp()
+      ↓
+MCPInspectionResult
+```
+
+Part 2D should determine the smallest correct **application-composition boundary** joining those two completed subsystems.
+
+Before proposing any production code:
+
+1. Review the completed profile, connection, and inspection architecture.
+
+2. Confirm that Part 2C should remain closed and identify any assumption from it that materially affects composition.
+
+3. Determine whether a project-owned complete application operation is now justified.
+
+4. Determine the smallest responsibility of that operation.
+
+5. Determine whether it should accept a connection profile directly.
+
+6. Determine whether it should own the connection lifetime.
+
+7. Determine how the composition boundary should remain open to both STDIO and future Streamable HTTP without contaminating `inspect_mcp()` with transport concerns.
+
+8. Review whether transport dispatch belongs inside application composition, the connection boundary, or another existing boundary.
+
+9. Determine whether presentation should consume `MCPInspectionResult` directly or whether a project-owned higher-level application result is now justified.
+
+10. Review whether target/profile identity should be preserved alongside `MCPInspectionResult`.
+
+11. Preserve the existing architectural distinction between:
+
+* target identity — what the user attempted to connect to, and
+* server-reported identity — what the MCP server reports through initialization metadata.
+
+12. Determine whether connection failure should propagate normally or receive project-owned structured result state.
+
+13. Confirm that primitive inspection failures already represented by `CategoryInspection` should not be redundantly normalized again at the application layer.
+
+14. Review the exact lifecycle contract:
+
+```text
+profile
+  ↓
+establish connection
+  ↓
+inspect
+  ↓
+close connection
+```
+
+15. Determine whether application composition should guarantee cleanup if inspection raises unexpectedly.
+
+16. Review whether a new module is actually justified or whether the existing package organization can still express the composition cleanly.
+
+17. Do not introduce a service class, registry, dispatcher, generic transport framework, or application result merely because those abstractions are common patterns. Require a concrete project-owned responsibility.
+
+18. Keep presentation completely downstream during this review.
+
+19. Keep ordinary inspection strictly read-only:
+
+* do not call tools,
+* do not read resource contents,
+* do not materialize resource templates,
+* do not render/get prompts.
+
+20. Identify the high-value architectural contracts worth protecting with regression tests.
+
+21. Identify any new decisions that should be added to `ARCHITECTURAL_DECISION_LEDGER.md`.
+
+22. Recommend the smallest safe first implementation milestone.
+
+Continue using the established teaching/development contract:
+
+* architecture before implementation
+* professor/software-architect style
+* explain reasoning and tradeoffs
+* extremely small, highly testable milestones
+* preserve existing behavior
+* compile after every implementation
+* run focused regression tests
+* run the full regression suite after every milestone
+* stop after every checkpoint
+* distinguish architectural decisions from implementation choices
+* avoid speculative abstractions
+
+Do **not** begin coding until the Part 2D application-composition boundary review is complete.
