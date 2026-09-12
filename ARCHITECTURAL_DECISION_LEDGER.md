@@ -891,3 +891,319 @@ The existing modules already have clear responsibilities:
 - `inspection.py` owns inspection policy over an already-connected client.
 
 A new module or service object would currently add indirection without introducing a distinct responsibility.
+
+## 9/10/26 6:13 pm update
+## ---------------------
+
+## Decision — Application-Level Result Composes Safe Target Identity with Inspection Evidence
+
+### Status
+
+Accepted — Part 2D.1A
+
+### Decision
+
+The application-level result will compose a safe project-owned target summary
+with the existing aggregate inspection result.
+
+The current structure is conceptually:
+
+```text
+ApplicationInspectionResult
+├── target: InspectionTargetSummary
+└── inspection: MCPInspectionResult
+
+InspectionTargetSummary currently contains:
+
+configured display name
+transport identity
+
+It deliberately does not retain the raw connection profile, command,
+arguments, working directory, live SDK Client, connection state, or future
+credential material.
+
+Rationale
+
+Downstream consumers such as presentation need to know which configured target
+was inspected, but they do not need connection mechanics.
+
+Keeping a safe target summary prevents unnecessary propagation of runtime and
+potentially sensitive configuration while preserving useful project-owned
+identity.
+
+The existing MCPInspectionResult remains authoritative inspection evidence
+and is composed directly rather than flattened or reconstructed.
+
+Consequences
+Presentation can consume configured target identity safely.
+Raw profiles do not need to flow into presentation.
+The application result does not retain a live connection.
+Inspection evidence remains structurally identical to the Part 2C result.
+Future target-summary fields should be added only when downstream consumers
+have a demonstrated need.
+Decision — Configured Target Identity and Server-Reported Identity Remain Distinct
+Status
+
+Accepted — Part 2D.1A; verified end-to-end in Part 2D.1C-A
+
+Decision
+
+Project-configured target identity and MCP server-reported identity are
+separate authoritative facts and will not be silently merged.
+
+Configured identity is represented by:
+
+ApplicationInspectionResult.target
+
+Server-reported identity is represented by:
+
+ApplicationInspectionResult
+    .inspection
+    .server_description
+    .server_info
+
+A mismatch between these identities is not automatically considered an error.
+
+Rationale
+
+The configured display name describes the target as known to the project or
+user.
+
+The negotiated server identity describes what the connected MCP server reports
+about itself.
+
+These facts originate from different authorities and may legitimately differ.
+
+Consequences
+Presentation should preserve and clearly distinguish both identities.
+Server identity must not overwrite configured identity.
+Configured identity must not be treated as negotiated server evidence.
+Future identity comparison or mismatch policy, if required, should be a
+separate explicit architectural decision.
+Decision — Application Composition Owns Connection Lifetime Scope, Not Lifecycle Mechanics
+Status
+
+Accepted — Part 2D.1B
+
+Decision
+
+The application composition boundary determines the scope during which the MCP
+connection must remain active.
+
+The MCP SDK high-level Client remains responsible for the actual mechanics of
+connection establishment, MCP negotiation, and cleanup.
+
+The conceptual pattern is:
+
+construct Client
+      ↓
+async with Client
+      ↓
+inspect_mcp(client)
+      ↓
+leave Client context
+      ↓
+return structured result
+Rationale
+
+Application policy must determine when inspection occurs relative to connection
+lifetime.
+
+Reimplementing transport startup, shutdown, ClientSession, or cleanup logic
+would duplicate responsibilities already provided by the SDK.
+
+Consequences
+application.py owns the lifetime scope.
+SDK Client owns lifecycle mechanics.
+No custom connection manager is currently justified.
+No manual ClientSession or manual initialization is introduced.
+Returned application results do not depend on an active connection.
+Decision — Unexpected Inspection Exceptions Propagate After Deterministic Client Cleanup
+Status
+
+Accepted — Part 2D.1B
+
+Decision
+
+If an unexpected exception escapes inspect_mcp() while the SDK Client
+context is active, the Client context is allowed to exit and perform cleanup,
+after which the original exception propagates unchanged.
+
+The application layer does not currently normalize that exception into an
+application status or custom exception.
+
+Rationale
+
+Part 2C already represents expected primitive inspection failures using
+CategoryInspection statuses and preserved failure evidence.
+
+Unexpected orchestration/programming failures are semantically different and
+should not be silently converted into the same result model without a concrete
+requirement.
+
+The SDK async context manager already provides the appropriate cleanup
+mechanism.
+
+Consequences
+Primitive FAILED and PARTIAL states remain structured inspection
+evidence.
+Unexpected inspection exceptions remain exceptional.
+The original exception object is preserved.
+Client cleanup occurs before propagation.
+A future application exception policy requires a separate architectural
+review.
+Decision — Connection Failures Remain Propagating Failures
+Status
+
+Accepted / Deferred for further normalization — Part 2D.1B
+
+Decision
+
+Connection construction, connection establishment, and MCP negotiation
+failures are currently allowed to propagate.
+
+No project-owned connection-failure DTO, application-wide failure status, or
+custom connection exception hierarchy is introduced at this stage.
+
+Rationale
+
+The project does not yet have a demonstrated requirement for normalized
+connection failure results.
+
+Introducing such a model during initial application composition would create
+new semantics without sufficient evidence.
+
+Consequences
+inspect_stdio_profile() returns an ApplicationInspectionResult only when
+application composition reaches a successful structured inspection result.
+Connection failures remain exceptions.
+Presentation of successfully returned inspection results can proceed
+independently of a future connection-failure UX policy.
+Connection-failure normalization remains available for later architectural
+review if concrete application requirements justify it.
+Decision — Keep the First Application Operation STDIO-Specific
+Status
+
+Accepted — Part 2D.1B
+
+Decision
+
+The first application-level operation is explicitly STDIO-specific:
+
+inspect_stdio_profile(
+    profile: StdioConnectionProfile,
+) -> ApplicationInspectionResult
+
+The project will not yet introduce a generic inspect_profile() dispatcher,
+transport registry, connection factory, profile union, or transport strategy
+hierarchy.
+
+Rationale
+
+STDIO is currently the only implemented project-owned transport profile.
+
+A generic multi-transport abstraction would therefore be based on anticipated
+rather than observed commonality.
+
+Streamable HTTP will provide the second concrete transport case from which a
+justified common abstraction can later be derived.
+
+Consequences
+Current code remains explicit and easy to understand.
+STDIO-specific translation remains in the connection boundary.
+Transport-neutral inspection remains reusable.
+Generic transport composition is deferred until another real transport
+exists.
+Decision — Protect the Application Boundary with One Real STDIO Integration Proof
+Status
+
+Accepted and verified — Part 2D.1C / Part 2D.1C-A
+
+Decision
+
+The project will maintain one real application-level STDIO integration proof
+that invokes inspect_stdio_profile() directly using the existing minimal
+STDIO MCP test server.
+
+The test proves the complete path:
+
+StdioConnectionProfile
+        ↓
+application composition
+        ↓
+real SDK parameter translation
+        ↓
+real SDK Client
+        ↓
+real STDIO subprocess
+        ↓
+real MCP negotiation
+        ↓
+transport-neutral inspection
+        ↓
+ApplicationInspectionResult
+Rationale
+
+Part 2B already proves the real STDIO connection boundary, and focused
+Part 2D.1B tests protect composition and lifecycle semantics.
+
+One application-level integration test provides valuable seam evidence that
+all real components compose correctly without duplicating the exhaustive
+lower-level test suites.
+
+Consequences
+The real application operation has end-to-end evidence.
+The existing minimal STDIO test server is reused.
+No separate integration framework is introduced.
+Additional real STDIO application tests are not currently justified unless
+a new architectural contract appears.
+The integration proof does not duplicate pagination, capability-gating, or
+primitive failure tests already owned by Part 2C.
+
+## 9/12/26 7:37 pm update
+## ----------------------
+
+### AD-041 — Keep Primitive Presentation Renderers Explicit and SDK-Shape-Aware
+
+**Decision**
+
+Presentation maintains separate explicit renderers for Tools, Resources,
+Resource Templates, and Prompts.
+
+Shared presentation abstractions are introduced only where semantics are
+genuinely identical across primitive categories.
+
+The common inventory-outcome behavior for successful-empty inventories and
+retained failures is shared through a small private helper. Primitive page
+traversal and item formatting remain explicit within each primitive renderer.
+
+Prompt arguments remain nested Prompt evidence rather than becoming a separate
+primitive presentation category.
+
+Presentation may iterate across retained pagination pages and present their
+items as one human-readable inventory, but the authoritative paginated SDK
+results remain unchanged in the inspection result.
+
+**Rationale**
+
+Although all primitive renderers contain superficially similar page/item loops,
+their protocol semantics and displayed fields differ materially:
+
+- Tools render input/output schemas.
+- Resources render concrete URIs and optional size.
+- Resource Templates render URI templates and have no resource size.
+- Prompts render nested Prompt arguments and preserve the three-state
+  `required` field without coercing an unspecified value to false.
+
+A generic primitive renderer or generic pagination abstraction would therefore
+replace clear SDK-aware code with callbacks, selectors, or configuration
+without providing meaningful semantic reuse.
+
+**Consequences**
+
+- Primitive renderers remain straightforward to read and test.
+- Shared inventory outcome semantics remain consistent across all four
+  categories.
+- SDK/protocol distinctions remain visible in presentation code.
+- Future abstraction remains possible if additional presentation surfaces or
+  repeated semantic responsibilities provide concrete evidence for it.
