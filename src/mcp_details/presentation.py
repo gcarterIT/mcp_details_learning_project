@@ -7,6 +7,7 @@ from mcp.types import (
     ListResourceTemplatesResult,
     ListResourcesResult,
     ListToolsResult,
+    ServerCapabilities,
 )
 
 from mcp_details.results import (
@@ -14,6 +15,24 @@ from mcp_details.results import (
     CategoryInspection,
     InspectionStatus,
 )
+
+def _append_json(
+    lines: list[str],
+    *,
+    value: object,
+    indent: str,
+) -> None:
+    """Append one JSON value in readable indented form."""
+
+    rendered = json.dumps(
+        value,
+        indent=2,
+    )
+
+    lines.extend(
+        f"{indent}{line}"
+        for line in rendered.splitlines()
+    )
 
 
 def _append_schema(
@@ -25,16 +44,25 @@ def _append_schema(
 
     lines.append(f"    {label}:")
 
-    rendered_schema = json.dumps(
-        schema,
-        indent=2,
+    _append_json(
+        lines,
+        value=schema,
+        indent="      ",
     )
+    
+def _append_optional_boolean(
+    lines: list[str],
+    *,
+    label: str,
+    value: bool | None,
+    indent: str,
+) -> None:
+    if value is None:
+        return
 
-    lines.extend(
-        f"      {line}"
-        for line in rendered_schema.splitlines()
+    lines.append(
+        f"{indent}{label}: {'yes' if value else 'no'}"
     )
-
 
 def _render_tools(
     tools: CategoryInspection[ListToolsResult],
@@ -178,6 +206,21 @@ def render_report(result: ApplicationInspectionResult) -> str:
         f"  Protocol Version: {server.protocol_version}",
         "",
     ]
+
+    lines.extend(
+        _render_server_capabilities(
+            server.server_capabilities,
+        )
+    )
+    lines.append("")
+
+    if server.instructions is not None:
+        lines.append("Instructions")
+
+        for instruction_line in server.instructions.splitlines():
+            lines.append(f"  {instruction_line}")
+
+        lines.append("")
 
     lines.extend(_render_tools(inspection.tools))
 
@@ -365,5 +408,96 @@ def _render_prompts(
 
     return lines
     
-    
+def _render_server_capabilities(
+    capabilities: ServerCapabilities,
+) -> list[str]:
+    lines = ["Server Capabilities"]
+
+    capability_reported = False
+
+    if capabilities.logging is not None:
+        capability_reported = True
+        lines.append("  Logging: advertised")
+
+    if capabilities.prompts is not None:
+        capability_reported = True
+        lines.append("  Prompts: advertised")
+        _append_optional_boolean(
+            lines,
+            label="List Changed",
+            value=capabilities.prompts.list_changed,
+            indent="    ",
+        )
+
+    if capabilities.resources is not None:
+        capability_reported = True
+        lines.append("  Resources: advertised")
+        _append_optional_boolean(
+            lines,
+            label="Subscribe",
+            value=capabilities.resources.subscribe,
+            indent="    ",
+        )
+        _append_optional_boolean(
+            lines,
+            label="List Changed",
+            value=capabilities.resources.list_changed,
+            indent="    ",
+        )
+
+    if capabilities.tools is not None:
+        capability_reported = True
+        lines.append("  Tools: advertised")
+        _append_optional_boolean(
+            lines,
+            label="List Changed",
+            value=capabilities.tools.list_changed,
+            indent="    ",
+        )
+
+    if capabilities.completions is not None:
+        capability_reported = True
+        lines.append("  Completions: advertised")
+
+    if capabilities.tasks is not None:
+        capability_reported = True
+        lines.append("  Tasks: advertised")
+
+        if capabilities.tasks.list is not None:
+            lines.append("    List: advertised")
+
+        if capabilities.tasks.cancel is not None:
+            lines.append("    Cancel: advertised")
+
+        if capabilities.tasks.requests is not None:
+            lines.append("    Requests:")
+
+            if capabilities.tasks.requests.tools is not None:
+                lines.append("      Tools:")
+
+                if capabilities.tasks.requests.tools.call is not None:
+                    lines.append("        Call: advertised")
+
+    if capabilities.experimental is not None:
+        capability_reported = True
+        lines.append("  Experimental:")
+        _append_json(
+            lines,
+            value=capabilities.experimental,
+            indent="    ",
+        )
+
+    if capabilities.extensions is not None:
+        capability_reported = True
+        lines.append("  Extensions:")
+        _append_json(
+            lines,
+            value=capabilities.extensions,
+            indent="    ",
+        )
+        
+    if not capability_reported:
+        lines.append("  No server capabilities reported.")
+
+    return lines
     

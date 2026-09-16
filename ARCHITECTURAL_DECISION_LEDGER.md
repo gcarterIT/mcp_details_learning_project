@@ -1207,3 +1207,46 @@ without providing meaningful semantic reuse.
 - SDK/protocol distinctions remain visible in presentation code.
 - Future abstraction remains possible if additional presentation surfaces or
   repeated semantic responsibilities provide concrete evidence for it.
+  
+## 9/15/26 9:14 pm update
+## ---------------------
+
+## AD-042 — Render Server Capabilities as Independent Authoritative Evidence
+
+**Status:** Accepted
+
+### Decision
+
+Server capabilities are preserved and rendered as authoritative MCP SDK semantic evidence independently from primitive inspection statuses.
+
+Known capability structures are rendered explicitly according to their SDK semantics:
+
+- presence-only capabilities are reported as advertised;
+- optional boolean details preserve the distinction between `True`, `False`, and `None`;
+- nested capability structures preserve their meaningful hierarchy;
+- open `experimental` and `extensions` mappings are rendered as structured JSON without application-level semantic interpretation.
+
+Capability advertisement is not inferred from primitive inspection outcomes, and primitive inspection outcomes are not inferred from capability advertisement.
+
+The presentation layer does not manufacture an aggregate inspection status from either source.
+
+### Rationale
+
+Server capability advertisement and application-observed inspection results represent different authoritative facts.
+
+For example, a server may advertise tools support while a subsequent tools inspection fails. Both facts must remain visible rather than being collapsed into a single derived state.
+
+Explicit rendering also preserves the MCP SDK's semantic structure without introducing speculative capability DTOs, reflection-based rendering, or application-specific interpretations of open extension data.
+
+### Consequences
+
+- `ServerCapabilities` remains authoritative SDK semantic evidence.
+- Primitive `CategoryInspection` status remains authoritative application inspection evidence.
+- Capability and inspection evidence may legitimately differ.
+- Known capability structures are rendered explicitly.
+- Open experimental and extension data is preserved without interpretation.
+- No separate capability DTO is introduced.
+- No generic reflection-based capability renderer is introduced.
+- No aggregate inspection status is introduced.
+- Future capability support should be added only when justified by concrete SDK or application requirements.
+

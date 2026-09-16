@@ -1,0 +1,87 @@
+# Part 2D.2C — Complete Terminal Report Coverage and Presentation Boundary Closure Review
+
+We are continuing my **MCP Details Learning Project**.
+
+Part 2D.2B — Primitive Inventory Rendering is complete.
+
+Please use the attached project context and completion artifacts as the
+authoritative basis for this conversation, especially:
+
+- `Part_2D.2B_Completion_Note.md`
+- `PART2D.2C_CONTEXT_20260912.md`
+- `ARCHITECTURAL_DECISION_LEDGER.md`
+- any earlier project context files needed to verify established architecture
+
+The authoritative regression baseline entering this chat is:
+
+- **17 presentation tests passing**
+- **68 total tests passing**
+
+The terminal presentation boundary currently renders all four MCP primitive
+categories:
+
+- Tools
+- Resources
+- Resource Templates
+- Prompts
+
+The current presentation architecture is intentionally pure:
+
+`ApplicationInspectionResult -> render_report() -> str`
+
+Presentation must not reconnect to the MCP server, repeat inspection, own an SDK
+Client lifecycle, or introduce transport dependencies.
+
+We are now beginning:
+
+**Part 2D.2C — Complete Terminal Report Coverage and Presentation Boundary
+Closure Review**
+
+Before proposing any production code:
+
+1. Review the actual current `ApplicationInspectionResult`,
+   `MCPInspectionResult`, `ServerDescription`, and related result-model
+   evidence.
+2. Review the actual current `presentation.py` / `render_report()` behavior
+   that I provide.
+3. Compare the evidence stored in the structured result against the evidence
+   currently exposed in the terminal report.
+4. Identify any remaining presentation gaps.
+5. Pay particular attention to:
+   - configured target identity
+   - protocol version
+   - server-reported identity/name/version
+   - server capabilities
+   - server instructions
+   - primitive inspection statuses and inventories
+6. Distinguish carefully between:
+   - evidence already stored but not displayed, and
+   - desired evidence that is not currently stored and would therefore require
+     an upstream inspection/result-model review.
+7. Determine whether displaying `ServerCapabilities` provides distinct useful
+   evidence or merely duplicates primitive inspection statuses.
+8. Confirm that configured target identity remains separate from
+   server-reported identity.
+9. Confirm whether any primitive rendering gaps remain after Part 2D.2B.
+10. Do not introduce an aggregate overall inspection status unless separately
+    justified.
+11. Do not introduce generic renderer frameworks, renderer classes, Rich,
+    notebook/Streamlit renderers, export frameworks, or new inspection fields
+    merely for presentation convenience.
+12. Recommend the smallest safe next milestone only after the coverage review
+    is complete.
+
+Continue using the established teaching contract:
+
+- architecture before implementation
+- professor/software architect style
+- extremely small, highly testable milestones
+- preserve behavior exactly
+- compile after every implementation
+- run focused tests and then the full regression suite
+- stop after every checkpoint
+- separate architectural decisions from implementation
+- prefer actual repository and installed SDK evidence over assumptions
+
+Do not begin coding until the Part 2D.2C architectural coverage review is
+complete.

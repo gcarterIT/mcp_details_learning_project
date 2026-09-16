@@ -1,15 +1,25 @@
 from mcp.types import (
+    CompletionsCapability,
     Implementation,
     ListPromptsResult,
     ListResourceTemplatesResult,
     ListResourcesResult,
     ListToolsResult,
+    LoggingCapability,
     Prompt,
     PromptArgument,
+    PromptsCapability,
     Resource,
     ResourceTemplate,
+    ResourcesCapability,
     ServerCapabilities,
+    ServerTasksCapability,
+    ServerTasksRequestsCapability,
+    TasksCallCapability,
+    TasksListCapability,
+    TasksToolsCapability,
     Tool,
+    ToolsCapability,
 )
 
 from mcp_details.presentation import render_report
@@ -72,18 +82,210 @@ def test_render_report_includes_core_application_inspection_summary() -> None:
     assert "1.2.3" in report
     assert "2025-06-18" in report
 
-    assert "Tools" in report
+    assert report.count("\nTools\n") == 1
     assert "SUCCESS" in report
 
-    assert "Resources" in report
+    assert report.count("\nResources\n") == 1
     assert "NOT_ADVERTISED" in report
 
-    assert "Resource Templates" in report
+    assert report.count("\nResource Templates\n") == 1
     assert "PARTIAL" in report
 
-    assert "Prompts" in report
+    assert report.count("\nPrompts\n") == 1
     assert "FAILED" in report
     
+def test_render_report_includes_advertised_server_capabilities() -> None:
+    capabilities = ServerCapabilities(
+        logging=LoggingCapability(),
+        prompts=PromptsCapability(
+            listChanged=True,
+        ),
+        resources=ResourcesCapability(
+            subscribe=False,
+            listChanged=True,
+        ),
+        tools=ToolsCapability(
+            listChanged=False,
+        ),
+        completions=CompletionsCapability(),
+    )
+
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="Capability MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=capabilities,
+                instructions=None,
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Server Capabilities" in report
+
+    assert "Logging: advertised" in report
+    assert "Completions: advertised" in report
+
+    assert "Prompts: advertised" in report
+    assert "List Changed: yes" in report
+
+    assert "Resources: advertised" in report
+    assert "Subscribe: no" in report
+
+    assert "Tools: advertised" in report
+    assert "List Changed: no" in report
+
+
+def test_render_report_omits_unspecified_nested_capability_values() -> None:
+    capabilities = ServerCapabilities(
+        tools=ToolsCapability(),
+        resources=ResourcesCapability(),
+        prompts=PromptsCapability(),
+    )
+
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="Unspecified Capability MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=capabilities,
+                instructions=None,
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Tools: advertised" in report
+    assert "Resources: advertised" in report
+    assert "Prompts: advertised" in report
+
+    assert "Subscribe:" not in report
+    assert "List Changed:" not in report
+
+
+def test_render_report_reports_when_no_server_capabilities_are_advertised() -> None:
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="No Capabilities MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=ServerCapabilities(),
+                instructions=None,
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Server Capabilities" in report
+    assert "No server capabilities reported." in report
+
+
+def test_render_report_includes_server_instructions_when_present() -> None:
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="Instruction MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=ServerCapabilities(),
+                instructions=(
+                    "Use this server for weather observations.\n"
+                    "Forecasts are updated every six hours."
+                ),
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Instructions" in report
+    assert "Use this server for weather observations." in report
+    assert "Forecasts are updated every six hours." in report
+    
+        
 def test_render_report_includes_tools_from_all_successful_pages() -> None:
     first_tool = Tool(
         name="get_weather",
@@ -1092,4 +1294,117 @@ def test_render_report_reports_failed_prompts_without_inventory() -> None:
     assert result.inspection.prompts.pages == ()
     assert result.inspection.prompts.failure is failure
     
+def test_render_report_includes_nested_task_capabilities() -> None:
+    capabilities = ServerCapabilities(
+        tasks=ServerTasksCapability(
+            list=TasksListCapability(),
+            requests=ServerTasksRequestsCapability(
+                tools=TasksToolsCapability(
+                    call=TasksCallCapability(),
+                ),
+            ),
+        ),
+    )
+
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="Tasks Capability MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=capabilities,
+                instructions=None,
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Tasks: advertised" in report
+    assert "List: advertised" in report
+    assert "Requests:" in report
+    assert "Tools:" in report
+    assert "Call: advertised" in report
+
+    assert "Cancel: advertised" not in report
+    assert "No server capabilities reported." not in report
     
+def test_render_report_preserves_experimental_and_extension_capabilities() -> None:
+    capabilities = ServerCapabilities(
+        experimental={
+            "weather-streaming": {
+                "version": 1,
+                "supportsAlerts": True,
+            },
+        },
+        extensions={
+            "com.example.weather": {
+                "feature": "alerts",
+                "version": "2",
+            },
+        },
+    )
+
+    result = ApplicationInspectionResult(
+        target=InspectionTargetSummary(
+            display_name="Open Capability MCP",
+            transport="stdio",
+        ),
+        inspection=MCPInspectionResult(
+            server_description=ServerDescription(
+                protocol_version="2025-11-25",
+                server_info=None,
+                server_capabilities=capabilities,
+                instructions=None,
+            ),
+            tools=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resources=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            resource_templates=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+            prompts=CategoryInspection(
+                status=InspectionStatus.NOT_ADVERTISED,
+                pages=(),
+            ),
+        ),
+    )
+
+    report = render_report(result)
+
+    assert "Experimental:" in report
+    assert '"weather-streaming"' in report
+    assert '"version": 1' in report
+    assert '"supportsAlerts": true' in report
+
+    assert "Extensions:" in report
+    assert '"com.example.weather"' in report
+    assert '"feature": "alerts"' in report
+    assert '"version": "2"' in report
+
+    assert "No server capabilities reported." not in report
