@@ -4,12 +4,28 @@ from mcp import Client
 
 from mcp_details.connection import build_stdio_server_parameters
 from mcp_details.inspection import inspect_mcp
-from mcp_details.profiles import StdioConnectionProfile
+from mcp_details.profiles import (
+    StdioConnectionProfile,
+    StreamableHttpConnectionProfile,
+)
 from mcp_details.results import (
     ApplicationInspectionResult,
     InspectionTargetSummary,
 )
 
+async def _inspect_client(
+    client: Client,
+    target: InspectionTargetSummary,
+) -> ApplicationInspectionResult:
+    """Inspect one MCP target through an already-constructed SDK client."""
+
+    async with client:
+        inspection = await inspect_mcp(client)
+
+    return ApplicationInspectionResult(
+        target=target,
+        inspection=inspection,
+    )
 
 async def inspect_stdio_profile(
     profile: StdioConnectionProfile,
@@ -24,10 +40,18 @@ async def inspect_stdio_profile(
     parameters = build_stdio_server_parameters(profile)
     client = Client(parameters)
 
-    async with client:
-        inspection = await inspect_mcp(client)
+    return await _inspect_client(client, target)
+    
+async def inspect_streamable_http_profile(
+    profile: StreamableHttpConnectionProfile,
+) -> ApplicationInspectionResult:
+    """Inspect one Streamable HTTP MCP target through the complete application lifecycle."""
 
-    return ApplicationInspectionResult(
-        target=target,
-        inspection=inspection,
+    target = InspectionTargetSummary(
+        display_name=profile.display_name,
+        transport=profile.transport,
     )
+
+    client = Client(profile.url)
+
+    return await _inspect_client(client, target)

@@ -1250,3 +1250,173 @@ Explicit rendering also preserves the MCP SDK's semantic structure without intro
 - No aggregate inspection status is introduced.
 - Future capability support should be added only when justified by concrete SDK or application requirements.
 
+## 9/16/26 6:36 pm update
+## ----------------------
+
+## 6. Architectural Decision Ledger addition
+
+I recommend **one new durable decision** from the manual acceptance work. It is distinct from AD-042 and captures a principle we actually learned through evidence.
+
+If AD-042 is currently your latest decision, number this **AD-043**:
+
+```markdown
+## AD-043 — Protect Top-Level Presentation Composition as a Behavioral Contract
+
+**Status:** Accepted
+
+### Context
+
+During Part 2D.2C.5 manual end-to-end STDIO acceptance testing, the
+terminal report rendered the complete Tools section twice.
+
+The structured inspection result contained exactly one tools page and
+one representative tool, proving that the duplication did not originate
+from the MCP server, transport, pagination, inspection, or structured
+result boundary.
+
+Source review showed that `render_report()` accidentally composed
+`_render_tools(inspection.tools)` twice.
+
+The existing automated presentation tests verified that expected
+category evidence was present, but presence assertions did not detect
+duplicate top-level composition.
+
+### Decision
+
+Top-level report composition is treated as a behavioral presentation
+contract.
+
+For each authoritative primitive category currently represented by
+`ApplicationInspectionResult`, `render_report()` must compose exactly one
+top-level category section:
+
+- Tools;
+- Resources;
+- Resource Templates;
+- Prompts.
+
+Tests should protect this observable report behavior rather than private
+implementation details such as the number of times a particular private
+renderer function is invoked.
+
+### Rationale
+
+A report may contain all required evidence and still be behaviorally
+incorrect if that evidence is accidentally composed multiple times.
+
+Testing only for presence is therefore insufficient at the application
+report-composition boundary.
+
+Protecting the public rendered result preserves implementation freedom
+while detecting duplication or omission of authoritative category
+sections.
+
+### Consequences
+
+- Core report-composition tests protect both presence and single
+  composition of primitive-category sections.
+- Tests do not mock or count calls to private renderer functions merely
+  to enforce this behavior.
+- Primitive renderer implementations remain independent of the
+  top-level composition contract.
+- Duplicate category composition is treated as a presentation defect.
+- No generic renderer framework or additional presentation abstraction
+  is required.
+- Manual end-to-end acceptance remains valuable as complementary
+  evidence to automated unit and integration tests.
+  
+## 9/19/26 4:19 pm update
+## ----------------------
+  
+### AD-049 — Use the SDK Client URL Contract Directly for Minimal Streamable HTTP
+
+**Decision**
+
+For the initial unauthenticated Streamable HTTP path, MCP Details passes the
+resolved profile URL directly to the MCP SDK `Client`.
+
+No project-owned Streamable HTTP target builder, connection wrapper, factory,
+registry, or transport strategy is introduced while the required translation
+remains only:
+
+`profile.url -> Client(profile.url)`
+
+The application layer constructs the transport-specific SDK client and then
+delegates the shared connected-client lifecycle to the private application
+composition helper.
+
+**Rationale**
+
+The installed MCP Python SDK 2.1.1 already accepts a URL string as a supported
+`Client` server target and owns Streamable HTTP transport construction,
+protocol negotiation, and connection lifecycle mechanics.
+
+A project-owned abstraction that merely converts a string to the same string
+would not own meaningful project behavior.
+
+STDIO remains intentionally asymmetric because its project-owned profile must
+be translated into `StdioServerParameters`.
+
+A real Streamable HTTP integration test verifies the complete path through a
+real SDK client, real HTTP transport, real MCP negotiation, and real MCP
+server.
+
+**Consequences**
+
+- `connection.py` does not require a Streamable HTTP builder for the minimal
+  path.
+- `inspect_streamable_http_profile()` may construct `Client(profile.url)`
+  directly.
+- Shared client lifecycle and inspection composition remain transport-neutral
+  after Client construction.
+- Future HTTP requirements such as authentication, headers, credential
+  resolution, TLS configuration, or custom HTTP-client behavior may justify
+  introducing additional connection-layer construction when those
+  requirements actually exist.
+- Transport symmetry is not itself a reason to introduce an abstraction.
+
+### AD-050 — Share Application Lifecycle Only After Transport-Specific Client Construction
+
+**Decision**
+
+Transport-specific application entry points remain responsible for constructing
+an MCP SDK `Client` from their respective project-owned connection profiles.
+
+After Client construction, the common connected-client lifecycle is delegated
+to a private application helper that:
+
+1. enters the SDK Client context,
+2. invokes transport-neutral MCP inspection,
+3. exits the Client context, and
+4. assembles the `ApplicationInspectionResult`.
+
+The shared helper accepts an already-constructed SDK Client and a safe
+`InspectionTargetSummary`; it does not accept or dispatch on connection
+profiles.
+
+**Rationale**
+
+STDIO and Streamable HTTP require different connection construction:
+
+- STDIO requires translation to `StdioServerParameters`.
+- Minimal Streamable HTTP can pass its URL directly to the SDK `Client`.
+
+Their behavior becomes genuinely identical only after Client construction.
+
+Sharing the lifecycle at that point removes demonstrated duplication without
+introducing a generic profile hierarchy, connection factory, transport
+dispatcher, or transport-aware inspection boundary.
+
+**Consequences**
+
+- Transport-specific connection construction remains explicit.
+- Client lifecycle ownership is centralized at the application layer.
+- `inspect_mcp()` remains transport-neutral.
+- Adding another transport does not automatically require a generic transport
+  framework.
+- A broader dispatch abstraction should be introduced only if a concrete
+  caller later needs to operate on an unknown profile variant.
+
+  
+  
+  

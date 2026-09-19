@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from mcp_details.profiles import StdioConnectionProfile
-
+from mcp_details.profiles import (
+    StdioConnectionProfile,
+    StreamableHttpConnectionProfile,
+)
 
 def test_stdio_profile_can_be_created_with_minimal_configuration() -> None:
     profile = StdioConnectionProfile(
@@ -77,3 +79,51 @@ def test_stdio_profile_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         profile.command = "npx"  # type: ignore[misc]
+        
+def test_streamable_http_profile_can_be_created_with_minimal_configuration() -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Demo MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    assert profile.display_name == "Remote Demo MCP"
+    assert profile.url == "http://localhost:8000/mcp"
+
+
+def test_streamable_http_profile_has_fixed_streamable_http_transport() -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Demo MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    assert profile.transport == "streamable_http"
+
+
+@pytest.mark.parametrize("display_name", ["", "   "])
+def test_streamable_http_profile_rejects_blank_display_name(
+    display_name: str,
+) -> None:
+    with pytest.raises(ValueError):
+        StreamableHttpConnectionProfile(
+            display_name=display_name,
+            url="http://localhost:8000/mcp",
+        )
+
+
+@pytest.mark.parametrize("url", ["", "   "])
+def test_streamable_http_profile_rejects_blank_url(url: str) -> None:
+    with pytest.raises(ValueError):
+        StreamableHttpConnectionProfile(
+            display_name="Remote Demo MCP",
+            url=url,
+        )
+
+
+def test_streamable_http_profile_is_immutable() -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Demo MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    with pytest.raises(FrozenInstanceError):
+        profile.url = "http://localhost:9000/mcp"  # type: ignore[misc]

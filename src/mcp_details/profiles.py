@@ -22,3 +22,22 @@ class StdioConnectionProfile:
 
         if not self.command.strip():
             raise ValueError("command must not be blank")
+            
+@dataclass(frozen=True)
+class StreamableHttpConnectionProfile:
+    """Project-owned configuration describing a Streamable HTTP MCP connection."""
+
+    display_name: str
+    url: str
+    transport: Literal["streamable_http"] = field(
+        default="streamable_http",
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        """Validate the minimal structural requirements of a Streamable HTTP profile."""
+        if not self.display_name.strip():
+            raise ValueError("display_name must not be blank")
+
+        if not self.url.strip():
+            raise ValueError("url must not be blank")

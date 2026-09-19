@@ -1,11 +1,16 @@
+import socket
+import subprocess
 import sys
+import time
 from pathlib import Path
-
 import pytest
 from mcp.types import ServerCapabilities
 
 from mcp_details import application
-from mcp_details.profiles import StdioConnectionProfile
+from mcp_details.profiles import (
+    StdioConnectionProfile,
+    StreamableHttpConnectionProfile,
+)
 from mcp_details.results import (
     CategoryInspection,
     InspectionStatus,
@@ -47,6 +52,39 @@ def make_inspection_result() -> MCPInspectionResult:
 def anyio_backend() -> str:
     """Run application async tests with AnyIO's asyncio backend."""
     return "asyncio"
+
+def _find_available_local_port() -> int:
+    """Ask the OS for an available localhost TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _wait_for_local_port(
+    port: int,
+    *,
+    timeout_seconds: float = 5.0,
+) -> None:
+    """Wait until a localhost TCP server is accepting connections."""
+    deadline = time.monotonic() + timeout_seconds
+
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(
+                ("127.0.0.1", port),
+                timeout=0.1,
+            ):
+                return
+        except OSError:
+            time.sleep(0.05)
+
+    raise TimeoutError(
+        f"Timed out waiting for localhost port {port}"
+    )
+
+
+
+
 
 @pytest.mark.anyio
 async def test_inspect_stdio_profile_composes_connection_and_inspection(
@@ -211,3 +249,175 @@ async def test_inspect_stdio_profile_with_real_mcp_server() -> None:
     assert description.server_info.name == "mcp-details-test-server"
     assert description.protocol_version is not None
     assert description.server_capabilities is not None
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_composes_connection_and_inspection(
+    monkeypatch,
+) -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Example MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    inspection_result = make_inspection_result()
+
+    events: list[str] = []
+
+    class FakeClient:
+        def __init__(self, server) -> None:
+            assert server == "http://localhost:8000/mcp"
+            self.is_connected = False
+            events.append("client_created")
+
+        async def __aenter__(self):
+            self.is_connected = True
+            events.append("client_entered")
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            self.is_connected = False
+            events.append("client_exited")
+
+    async def fake_inspect_mcp(client):
+        assert client.is_connected
+        events.append("inspection")
+        return inspection_result
+
+    monkeypatch.setattr(
+        application,
+        "Client",
+        FakeClient,
+    )
+    monkeypatch.setattr(
+        application,
+        "inspect_mcp",
+        fake_inspect_mcp,
+    )
+
+    result = await application.inspect_streamable_http_profile(profile)
+
+    assert events == [
+        "client_created",
+        "client_entered",
+        "inspection",
+        "client_exited",
+    ]
+
+    assert result.target.display_name == "Remote Example MCP"
+    assert result.target.transport == "streamable_http"
+    assert result.inspection is inspection_result
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_exits_client_when_inspection_raises(
+    monkeypatch,
+) -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Example MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    expected_failure = RuntimeError("inspection failed")
+
+    events: list[str] = []
+
+    class FakeClient:
+        def __init__(self, server) -> None:
+            assert server == "http://localhost:8000/mcp"
+            self.is_connected = False
+
+        async def __aenter__(self):
+            self.is_connected = True
+            events.append("client_entered")
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            self.is_connected = False
+            events.append("client_exited")
+
+    async def fake_inspect_mcp(client):
+        assert client.is_connected
+        events.append("inspection")
+        raise expected_failure
+
+    monkeypatch.setattr(
+        application,
+        "Client",
+        FakeClient,
+    )
+    monkeypatch.setattr(
+        application,
+        "inspect_mcp",
+        fake_inspect_mcp,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        await application.inspect_streamable_http_profile(profile)
+
+    assert captured.value is expected_failure
+
+    assert events == [
+        "client_entered",
+        "inspection",
+        "client_exited",
+    ]    
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_with_real_mcp_server() -> None:
+    """Inspect a real Streamable HTTP MCP server through the application boundary."""
+
+    server_path = (
+        Path(__file__).parent
+        / "support"
+        / "minimal_streamable_http_server.py"
+    ).resolve()
+
+    port = _find_available_local_port()
+
+    server_process = subprocess.Popen(
+        [
+            sys.executable,
+            str(server_path),
+            str(port),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        _wait_for_local_port(port)
+
+        profile = StreamableHttpConnectionProfile(
+            display_name="MCP Details HTTP Test Server",
+            url=f"http://127.0.0.1:{port}/mcp",
+        )
+
+        result = await application.inspect_streamable_http_profile(
+            profile
+        )
+
+        # Confirm that the application preserves project-owned target identity.
+        assert (
+            result.target.display_name
+            == "MCP Details HTTP Test Server"
+        )
+        assert result.target.transport == "streamable_http"
+
+        # Confirm that the real server was connected, negotiated, and inspected.
+        description = result.inspection.server_description
+
+        assert description.server_info is not None
+        assert (
+            description.server_info.name
+            == "mcp-details-http-test-server"
+        )
+        assert description.protocol_version is not None
+        assert description.server_capabilities is not None
+
+    finally:
+        server_process.terminate()
+
+        try:
+            server_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
+            server_process.wait(timeout=5)
