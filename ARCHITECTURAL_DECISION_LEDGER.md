@@ -1417,6 +1417,163 @@ dispatcher, or transport-aware inspection boundary.
 - A broader dispatch abstraction should be introduced only if a concrete
   caller later needs to operate on an unknown profile variant.
 
-  
-  
+## 9/26/26 4:19 pm update
+## ----------------------
+
+AD-051 — Keep the executable entry boundary separate from application composition
+
+Decision
+
+The user/process-facing entry boundary will live above the existing application composition boundary. __main__.py and entry.py may handle process invocation, command-line interpretation, synchronous execution bridging, and terminal delivery, while application.py remains independent of CLI/process concerns.
+
+Rationale
+
+The application boundary already provides reusable Python operations returning structured ApplicationInspectionResult values. Mixing argument parsing, sys.argv, stdout, or process semantics into that layer would couple reusable application behavior to one particular interface.
+
+The resulting direction remains:
+
+process / terminal
+       │
+       ▼
+entry
+       │
+       ▼
+application
+       │
+       ▼
+inspection
+
+Consequences
+
+application.py remains reusable outside a terminal application.
+presentation.py remains independent of stdout.
+Future interfaces can reuse the existing application boundary.
+__main__.py remains a thin Python module-entry adapter.
+
+AD-052 — Use explicit transport-specific terminal commands and existing concrete profiles
+
+Decision
+
+The initial terminal interface will expose the supported transports explicitly as:
+
+stdio
+streamable-http
+
+Parsed values are adapted directly into the existing:
+
+StdioConnectionProfile
+StreamableHttpConnectionProfile
+
+No additional generic CLI configuration DTO, transport hierarchy, registry, or dispatcher is introduced.
+
+Rationale
+
+The two supported transports have materially different connection semantics.
+
+STDIO requires process configuration:
+
+command
+args
+cwd
+
+Streamable HTTP requires:
+
+url
+
+The concrete profile types already represent these differences and remain the authoritative project-owned configuration models.
+
+Consequences
+
+Transport selection is visible and understandable.
+Profile validation is not duplicated in the entry layer.
+STDIO and Streamable HTTP can evolve independently.
+A generalized transport dispatcher remains deferred until additional transports or duplication justify one.
+
+AD-053 — Place one synchronous-to-asynchronous bridge at the outer execution boundary
+
+Decision
+
+The terminal-facing execution path remains synchronous at its outer boundary and enters the asynchronous MCP application through a single:
+
+asyncio.run(...)
+
+bridge in entry.py.
+
+Asynchronous behavior continues naturally below that bridge.
+
+Rationale
+
+MCP Client lifecycle and inspection operations are asynchronous, while a conventional terminal invocation begins as a synchronous Python process.
+
+Keeping the bridge near the process boundary avoids spreading event-loop management throughout application and inspection code.
+
+Conceptually:
+
+SYNCHRONOUS
+
+python -m mcp_details
+        │
+      main()
+        │
+       run()
+        │
+   asyncio.run(...)
+════════╪══════════════
+        │
+ASYNCHRONOUS
+        │
+_run_parsed_arguments()
+        │
+inspect_*()
+        │
+async with Client(...)
+        │
+await inspect_mcp(...)
+
+Consequences
+
+Event-loop ownership has a clear location.
+Application and inspection APIs remain naturally asynchronous.
+Lower layers do not create their own event loops.
+Other asynchronous Python consumers can continue using the async APIs directly without passing through run().
+
+AD-054 — Preserve simple process-failure semantics until a meaningful exception taxonomy exists
+
+Decision
+
+The initial application-entry boundary will distinguish successful report production from process failure without introducing broad runtime exception translation or a detailed exit-code taxonomy.
+
+Argument syntax failures remain owned by argparse. Ordinary runtime exceptions that prevent creation of a valid report propagate to the Python process. Structured category-level inspection failures contained within an ApplicationInspectionResult remain valid report content rather than process failures.
+
+Rationale
+
+The project does not yet have a sufficiently developed application-specific exception taxonomy to reliably distinguish expected connection/configuration failures from SDK failures and programming defects.
+
+A broad:
+
+except Exception:
+
+at the entry boundary could hide useful diagnostic information and incorrectly collapse fundamentally different failures into one artificial category.
+
+Consequences
+
+The initial semantics are:
+
+valid report
+    → stdout
+    → successful execution
+
+invalid CLI syntax
+    → argparse diagnostic
+    → nonzero execution
+
+runtime exception before valid result
+    → exception propagates
+    → nonzero execution
+
+category FAILED/PARTIAL inside valid result
+    → rendered report
+    → successful application execution
+
+Friendlier runtime error presentation and richer exit-code semantics remain explicitly deferred.
   
