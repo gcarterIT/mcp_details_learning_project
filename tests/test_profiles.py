@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from mcp_details.profiles import (
+    HttpHeaderEnvironmentReference,
     StdioConnectionProfile,
     StreamableHttpConnectionProfile,
 )
@@ -42,6 +43,40 @@ def test_stdio_profile_preserves_configured_arguments_and_cwd() -> None:
     assert profile.args == ("server.py", "--verbose")
     assert profile.cwd == cwd
 
+def test_stdio_profile_preserves_configured_environment_variables() -> None:
+    profile = StdioConnectionProfile(
+        display_name="Demo MCP",
+        command="python",
+        environment_variables=(
+            "WEATHER_API_KEY",
+            "WEATHER_REGION",
+        ),
+    )
+
+    assert profile.environment_variables == (
+        "WEATHER_API_KEY",
+        "WEATHER_REGION",
+    )
+
+
+def test_stdio_profile_defaults_environment_variables_to_empty_tuple() -> None:
+    profile = StdioConnectionProfile(
+        display_name="Demo MCP",
+        command="python",
+    )
+
+    assert profile.environment_variables == ()
+    
+@pytest.mark.parametrize("environment_variable", ["", "   "])
+def test_stdio_profile_rejects_blank_environment_variable_name(
+    environment_variable: str,
+) -> None:
+    with pytest.raises(ValueError):
+        StdioConnectionProfile(
+            display_name="Demo MCP",
+            command="python",
+            environment_variables=(environment_variable,),
+        )    
 
 def test_stdio_profile_defaults_args_to_empty_tuple_and_cwd_to_none() -> None:
     profile = StdioConnectionProfile(
@@ -127,3 +162,57 @@ def test_streamable_http_profile_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         profile.url = "http://localhost:9000/mcp"  # type: ignore[misc]
+        
+def test_http_header_environment_reference_preserves_names() -> None:
+    reference = HttpHeaderEnvironmentReference(
+        header_name="Authorization",
+        environment_variable="MCP_AUTHORIZATION",
+    )
+
+    assert reference.header_name == "Authorization"
+    assert reference.environment_variable == "MCP_AUTHORIZATION"
+
+
+@pytest.mark.parametrize("header_name", ["", "   "])
+def test_http_header_environment_reference_rejects_blank_header_name(
+    header_name: str,
+) -> None:
+    with pytest.raises(ValueError):
+        HttpHeaderEnvironmentReference(
+            header_name=header_name,
+            environment_variable="MCP_AUTHORIZATION",
+        )
+
+
+@pytest.mark.parametrize("environment_variable", ["", "   "])
+def test_http_header_environment_reference_rejects_blank_environment_variable(
+    environment_variable: str,
+) -> None:
+    with pytest.raises(ValueError):
+        HttpHeaderEnvironmentReference(
+            header_name="Authorization",
+            environment_variable=environment_variable,
+        )
+
+
+def test_streamable_http_profile_preserves_header_references() -> None:
+    reference = HttpHeaderEnvironmentReference(
+        header_name="Authorization",
+        environment_variable="MCP_AUTHORIZATION",
+    )
+
+    profile = StreamableHttpConnectionProfile(
+        display_name="Authenticated Demo MCP",
+        url="https://example.com/mcp",
+        header_references=(reference,),
+    )
+
+    assert profile.header_references == (reference,)
+    
+def test_streamable_http_profile_defaults_header_references_to_empty_tuple() -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Remote Demo MCP",
+        url="http://localhost:8000/mcp",
+    )
+
+    assert profile.header_references == ()    

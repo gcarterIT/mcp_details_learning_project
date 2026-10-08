@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from mcp_details import entry
+
 from mcp_details.profiles import (
+    HttpHeaderEnvironmentReference,
     StdioConnectionProfile,
     StreamableHttpConnectionProfile,
 )
@@ -42,11 +44,23 @@ async def test_streamable_http_entry_composes_profile_inspection_and_rendering(
         fake_render_report,
     )
 
+    header_references = (
+        HttpHeaderEnvironmentReference(
+            header_name="Authorization",
+            environment_variable="MCP_AUTHORIZATION",
+        ),
+        HttpHeaderEnvironmentReference(
+            header_name="X-API-Key",
+            environment_variable="WEATHER_API_KEY",
+        ),
+    )
+
     report = await entry.inspect_and_render_streamable_http(
         display_name="Demo Server",
         url="https://example.test/mcp",
+        header_references=header_references,
     )
-
+    
     assert report == "EXPECTED REPORT"
 
     assert len(events) == 2
@@ -59,6 +73,7 @@ async def test_streamable_http_entry_composes_profile_inspection_and_rendering(
     assert profile.display_name == "Demo Server"
     assert profile.url == "https://example.test/mcp"
     assert profile.transport == "streamable_http"
+    assert profile.header_references == header_references
 
     assert events[1] == ("render", inspection_result)
     
@@ -97,6 +112,10 @@ async def test_stdio_entry_composes_profile_inspection_and_rendering(
         command="python",
         args=("server.py", "--readonly"),
         cwd=Path("C:/mcp/demo"),
+        environment_variables=(
+            "WEATHER_API_KEY",
+            "WEATHER_REGION",
+        ),
     )
 
     assert report == "EXPECTED REPORT"
@@ -113,6 +132,12 @@ async def test_stdio_entry_composes_profile_inspection_and_rendering(
     assert profile.args == ("server.py", "--readonly")
     assert profile.cwd == Path("C:/mcp/demo")
     assert profile.transport == "stdio"
+    assert profile.environment_variables == (
+        "WEATHER_API_KEY",
+        "WEATHER_REGION",
+    )
+    
+    
 
     assert events[1] == ("render", inspection_result)  
     
@@ -173,8 +198,9 @@ async def test_run_parsed_arguments_routes_streamable_http_command(
     async def fake_inspect_and_render_streamable_http(
         display_name: str,
         url: str,
+        header_references: tuple[HttpHeaderEnvironmentReference, ...] = (),
     ) -> str:
-        calls.append((display_name, url))
+        calls.append((display_name, url, header_references))
         return "EXPECTED REPORT"
 
     monkeypatch.setattr(
@@ -200,6 +226,7 @@ async def test_run_parsed_arguments_routes_streamable_http_command(
         (
             "Demo Server",
             "http://localhost:8000/mcp",
+            (),
         )
     ]
     
@@ -216,6 +243,7 @@ async def test_run_parsed_arguments_routes_stdio_command(
         command: str,
         args: tuple[str, ...] = (),
         cwd: Path | None = None,
+        environment_variables: tuple[str, ...] = (),
     ) -> str:
         calls.append(
             (
@@ -223,6 +251,7 @@ async def test_run_parsed_arguments_routes_stdio_command(
                 command,
                 args,
                 cwd,
+                environment_variables,
             )
         )
         return "EXPECTED REPORT"
@@ -242,6 +271,10 @@ async def test_run_parsed_arguments_routes_stdio_command(
             "python",
             "--cwd",
             r"C:\mcp\demo",
+            "--env",
+            "WEATHER_API_KEY",
+            "--env",
+            "WEATHER_REGION",
             "--",
             "server.py",
             "--mode",
@@ -262,6 +295,10 @@ async def test_run_parsed_arguments_routes_stdio_command(
                 "readonly",
             ),
             Path(r"C:\mcp\demo"),
+            (
+            "WEATHER_API_KEY",
+            "WEATHER_REGION",
+            ),
         )
     ]
     
@@ -278,6 +315,7 @@ async def test_run_parsed_arguments_routes_minimal_stdio_command(
         command: str,
         args: tuple[str, ...] = (),
         cwd: Path | None = None,
+        environment_variables: tuple[str, ...] = (),
     ) -> str:
         calls.append(
             (
@@ -285,6 +323,7 @@ async def test_run_parsed_arguments_routes_minimal_stdio_command(
                 command,
                 args,
                 cwd,
+                environment_variables,
             )
         )
         return "EXPECTED REPORT"
@@ -314,6 +353,7 @@ async def test_run_parsed_arguments_routes_minimal_stdio_command(
             "python",
             (),
             None,
+            (),
         )
     ]
     
@@ -464,3 +504,127 @@ def test_python_module_entry_reports_invalid_arguments_as_process_failure() -> N
     assert completed.returncode != 0
     assert completed.stdout == ""
     assert completed.stderr != ""
+    
+def test_parse_arguments_parses_stdio_environment_variables() -> None:
+    parsed = entry._parse_arguments(
+        [
+            "stdio",
+            "--name",
+            "Demo STDIO",
+            "--command",
+            "python",
+            "--env",
+            "WEATHER_API_KEY",
+            "--env",
+            "WEATHER_REGION",
+        ]
+    )
+
+    assert parsed.environment_variables == [
+        "WEATHER_API_KEY",
+        "WEATHER_REGION",
+    ]
+    
+def test_parse_arguments_keeps_server_env_argument_after_separator() -> None:
+    parsed = entry._parse_arguments(
+        [
+            "stdio",
+            "--name",
+            "Demo STDIO",
+            "--command",
+            "python",
+            "--env",
+            "WEATHER_API_KEY",
+            "--",
+            "server.py",
+            "--env",
+            "SERVER_OPTION",
+        ]
+    )
+
+    assert parsed.environment_variables == [
+        "WEATHER_API_KEY",
+    ]
+
+    assert parsed.server_args == [
+        "server.py",
+        "--env",
+        "SERVER_OPTION",
+    ]    
+    
+def test_parse_arguments_parses_streamable_http_header_environment_references() -> None:
+    parsed = entry._parse_arguments(
+        [
+            "streamable-http",
+            "--name",
+            "Authenticated MCP",
+            "--url",
+            "https://example.com/mcp",
+            "--header-env",
+            "Authorization",
+            "MCP_AUTHORIZATION",
+            "--header-env",
+            "X-API-Key",
+            "WEATHER_API_KEY",
+        ]
+    )
+
+    assert parsed.transport == "streamable-http"
+    assert parsed.name == "Authenticated MCP"
+    assert parsed.url == "https://example.com/mcp"
+    assert parsed.header_environment_references == [
+        ["Authorization", "MCP_AUTHORIZATION"],
+        ["X-API-Key", "WEATHER_API_KEY"],
+    ]
+    
+@pytest.mark.anyio
+async def test_run_parsed_arguments_routes_streamable_http_header_environment_references(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parsed = entry._parse_arguments(
+        [
+            "streamable-http",
+            "--name",
+            "Authenticated MCP",
+            "--url",
+            "https://example.com/mcp",
+            "--header-env",
+            "Authorization",
+            "MCP_AUTHORIZATION",
+            "--header-env",
+            "X-API-Key",
+            "WEATHER_API_KEY",
+        ]
+    )
+
+    expected_report = "configured HTTP report"
+
+    async def fake_inspect_and_render_streamable_http(
+        display_name: str,
+        url: str,
+        header_references: tuple[HttpHeaderEnvironmentReference, ...] = (),
+    ) -> str:
+        assert display_name == "Authenticated MCP"
+        assert url == "https://example.com/mcp"
+        assert header_references == (
+            HttpHeaderEnvironmentReference(
+                header_name="Authorization",
+                environment_variable="MCP_AUTHORIZATION",
+            ),
+            HttpHeaderEnvironmentReference(
+                header_name="X-API-Key",
+                environment_variable="WEATHER_API_KEY",
+            ),
+        )
+
+        return expected_report
+
+    monkeypatch.setattr(
+        entry,
+        "inspect_and_render_streamable_http",
+        fake_inspect_and_render_streamable_http,
+    )
+
+    result = await entry._run_parsed_arguments(parsed)
+
+    assert result == expected_report

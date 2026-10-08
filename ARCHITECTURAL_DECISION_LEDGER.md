@@ -1577,3 +1577,110 @@ category FAILED/PARTIAL inside valid result
 
 Friendlier runtime error presentation and richer exit-code semantics remain explicitly deferred.
   
+## 10/4/26 4:19 pm update
+## ----------------------
+
+AD-055 — Represent Additional STDIO Environment Requirements as Runtime References
+
+Decision:
+MCP Details represents additional STDIO subprocess environment requirements as
+same-name references to variables in the MCP Details process environment.
+
+StdioConnectionProfile stores environment-variable names only, using
+environment_variables: tuple[str, ...]. It does not store resolved environment
+values.
+
+The terminal entry boundary exposes these references through repeatable
+--env NAME options. Values after the STDIO "--" separator remain opaque target
+server arguments and are not interpreted as MCP Details options.
+
+Environment-variable references are resolved at the connection-construction
+boundary. Each declared reference is required. If a declared variable is absent
+from the MCP Details process environment, connection construction fails.
+
+When no environment-variable references are configured,
+StdioServerParameters.env remains None, preserving the previous behavior.
+
+When references are configured, MCP Details passes only the explicitly resolved
+name/value pairs through StdioServerParameters.env. MCP Details does not copy or
+merge the complete parent process environment. Final composition with the SDK's
+safe default environment remains the MCP SDK's responsibility.
+
+Rationale:
+This keeps resolved runtime values out of project-owned connection profiles,
+keeps secret/value resolution close to connection construction, preserves the
+SDK's environment-management semantics, and adds the minimum configuration
+needed for real STDIO MCP servers that require application-specific environment
+variables.
+
+Deferred:
+- literal environment values in profiles
+- source-to-target environment-variable renaming
+- optional environment-variable references
+- automatic full parent-environment inheritance
+- .env-file loading
+- generalized secret-provider abstractions
+- cloud secret managers
+- persistent secret storage
+- HTTP authentication and headers
+
+## 10/7/26 9:38 pm update
+## ----------------------
+
+AD-056 — Represent Additional Streamable HTTP Headers as Runtime Environment References
+
+Decision
+
+Streamable HTTP connection profiles may declare additional HTTP-header requirements using explicit mappings from HTTP header names to environment-variable names.
+
+The profile stores only the header name and the environment-variable reference. It does not store the resolved header value.
+
+At connection construction time, MCP Details resolves each referenced environment variable from the current process environment and supplies the resulting header mapping to an MCP SDK HTTP client.
+
+All declared header references are required. If a referenced environment variable is absent, connection construction fails.
+
+The environment-variable value is treated as the complete HTTP header value. MCP Details does not transform, prefix, parse, or otherwise interpret it. For example, an Authorization header requiring a Bearer value may reference an environment variable whose value is already "Bearer <token>".
+
+When a Streamable HTTP profile contains no header references, MCP Details preserves the existing minimal direct-URL Client path. The configured HTTP-client/transport path is used only when additional headers are required.
+
+Rationale
+
+This preserves the distinction between connection configuration and runtime secret material. Profiles can describe how a connection obtains required HTTP headers without embedding credential values in project-owned configuration objects.
+
+Resolving values at the connection boundary keeps runtime credentials out of inspection results and presentation while allowing the connection layer to construct the SDK objects that actually require those values.
+
+Treating the environment value as the complete header value keeps the mechanism generic. MCP Details does not need authentication-scheme-specific behavior such as automatically constructing Bearer tokens.
+
+Preserving the direct URL path for profiles without additional headers avoids unnecessary connection machinery for the minimal Streamable HTTP case and preserves the architecture established in AD-049.
+
+Consequences
+
+- StreamableHttpConnectionProfile may contain zero or more HttpHeaderEnvironmentReference values.
+- Each reference identifies an HTTP header name and an environment-variable name.
+- Resolved header values are not stored in the profile.
+- Missing referenced environment variables cause connection-construction failure.
+- MCP Details supplies only the explicitly configured additional headers.
+- The MCP SDK remains responsible for MCP protocol-specific HTTP headers and transport behavior.
+- Header values may contain credentials without those credentials being embedded in the profile or CLI arguments.
+- The CLI exposes repeatable --header-env HEADER ENV_VAR configuration.
+- Profiles without header references continue to use the direct Client(profile.url) path.
+- Profiles with header references use the configured HTTP-client/Streamable-HTTP transport path.
+- HTTP-client lifetime for the configured path is owned by the connection-construction context; MCP Client lifetime remains owned by the application composition boundary.
+
+Deferred
+
+The following remain outside this decision:
+
+- literal header values stored directly in profiles
+- automatic Bearer-prefix construction
+- authentication-scheme-specific transformations
+- OAuth flows and token refresh
+- generalized SDK authentication-provider abstractions
+- .env-file loading
+- persistent credential storage
+- operating-system or cloud secret-manager integration
+- optional header references
+- duplicate-header policy beyond current mapping semantics
+- configurable TLS, proxies, timeouts, and arbitrary HTTP-client injection
+
+

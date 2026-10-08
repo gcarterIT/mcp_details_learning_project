@@ -1,0 +1,26 @@
+Formal closure determination - 2G.3I.7
+======================================
+
+Part 2G
+Resolved Connection Configuration Expansion
+
+2G.1  SDK/configuration investigation             COMPLETE
+2G.2  STDIO environment references                COMPLETE
+2G.3  Streamable HTTP header references           COMPLETE
+
+Architectural decisions:
+  AD-055 — STDIO runtime environment references
+  AD-056 — Streamable HTTP header environment references
+
+Final verification:
+  compileall: PASSED
+  pytest:     120 PASSED / 0 FAILED
+
+Manual acceptance:
+  STDIO environment forwarding:             PASSED
+  HTTP missing-required-header control:      PASSED (401)
+  HTTP configured-header MCP inspection:     PASSED
+
+Permanent real integration evidence:
+  ordinary Streamable HTTP:                  PASSED
+  configured-header Streamable HTTP:         PASSED

@@ -7,10 +7,13 @@ import pytest
 from mcp.types import ServerCapabilities
 
 from mcp_details import application
+
 from mcp_details.profiles import (
+    HttpHeaderEnvironmentReference,
     StdioConnectionProfile,
     StreamableHttpConnectionProfile,
 )
+
 from mcp_details.results import (
     CategoryInspection,
     InspectionStatus,
@@ -421,3 +424,247 @@ async def test_inspect_streamable_http_profile_with_real_mcp_server() -> None:
         except subprocess.TimeoutExpired:
             server_process.kill()
             server_process.wait(timeout=5)
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_with_real_header_required_mcp_server(
+    monkeypatch,
+) -> None:
+    """Inspect a real Streamable HTTP MCP server requiring a configured header."""
+    server_path = (
+        Path(__file__).parent
+        / "support"
+        / "header_required_streamable_http_server.py"
+    ).resolve()
+
+    port = _find_available_local_port()
+
+    server_process = subprocess.Popen(
+        [
+            sys.executable,
+            str(server_path),
+            str(port),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        _wait_for_local_port(port)
+
+        monkeypatch.setenv(
+            "MCP_DETAILS_HTTP_TEST_VALUE",
+            "expected-test-value",
+        )
+
+        profile = StreamableHttpConnectionProfile(
+            display_name="MCP Details Header-Required HTTP Test Server",
+            url=f"http://127.0.0.1:{port}/mcp",
+            header_references=(
+                HttpHeaderEnvironmentReference(
+                    header_name="X-MCP-Details-Test",
+                    environment_variable="MCP_DETAILS_HTTP_TEST_VALUE",
+                ),
+            ),
+        )
+
+        result = await application.inspect_streamable_http_profile(
+            profile
+        )
+
+        # Confirm that the application preserves project-owned target identity.
+        assert (
+            result.target.display_name
+            == "MCP Details Header-Required HTTP Test Server"
+        )
+        assert result.target.transport == "streamable_http"
+
+        # Confirm that the configured header reached the real server,
+        # allowing MCP negotiation and inspection to succeed.
+        description = result.inspection.server_description
+
+        assert description.server_info is not None
+        assert (
+            description.server_info.name
+            == "mcp-details-header-required-http-test-server"
+        )
+        assert description.protocol_version is not None
+        assert description.server_capabilities is not None
+
+    finally:
+        server_process.terminate()
+
+        try:
+            server_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
+            server_process.wait(timeout=5)
+
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_uses_configured_transport_for_header_references(
+    monkeypatch,
+) -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Authenticated Remote MCP",
+        url="https://example.com/mcp",
+        header_references=(
+            HttpHeaderEnvironmentReference(
+                header_name="Authorization",
+                environment_variable="MCP_AUTHORIZATION",
+            ),
+        ),
+    )
+
+    inspection_result = make_inspection_result()
+    expected_transport = object()
+
+    events: list[str] = []
+
+    class FakeConfiguredTransportContext:
+        async def __aenter__(self):
+            events.append("transport_context_entered")
+            return expected_transport
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            events.append("transport_context_exited")
+
+    def fake_configured_streamable_http_transport(received_profile):
+        assert received_profile is profile
+        events.append("transport_context_created")
+        return FakeConfiguredTransportContext()
+
+    class FakeClient:
+        def __init__(self, server) -> None:
+            assert server is expected_transport
+            self.is_connected = False
+            events.append("client_created")
+
+        async def __aenter__(self):
+            self.is_connected = True
+            events.append("client_entered")
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            self.is_connected = False
+            events.append("client_exited")
+
+    async def fake_inspect_mcp(client):
+        assert client.is_connected
+        events.append("inspection")
+        return inspection_result
+
+    monkeypatch.setattr(
+        application,
+        "configured_streamable_http_transport",
+        fake_configured_streamable_http_transport,
+    )
+    monkeypatch.setattr(
+        application,
+        "Client",
+        FakeClient,
+    )
+    monkeypatch.setattr(
+        application,
+        "inspect_mcp",
+        fake_inspect_mcp,
+    )
+
+    result = await application.inspect_streamable_http_profile(profile)
+
+    assert events == [
+        "transport_context_created",
+        "transport_context_entered",
+        "client_created",
+        "client_entered",
+        "inspection",
+        "client_exited",
+        "transport_context_exited",
+    ]
+
+    assert result.target.display_name == "Authenticated Remote MCP"
+    assert result.target.transport == "streamable_http"
+    assert result.inspection is inspection_result
+    
+@pytest.mark.anyio
+async def test_inspect_streamable_http_profile_exits_configured_transport_when_inspection_raises(
+    monkeypatch,
+) -> None:
+    profile = StreamableHttpConnectionProfile(
+        display_name="Authenticated Remote MCP",
+        url="https://example.com/mcp",
+        header_references=(
+            HttpHeaderEnvironmentReference(
+                header_name="Authorization",
+                environment_variable="MCP_AUTHORIZATION",
+            ),
+        ),
+    )
+
+    expected_transport = object()
+    expected_failure = RuntimeError("inspection failed")
+
+    events: list[str] = []
+
+    class FakeConfiguredTransportContext:
+        async def __aenter__(self):
+            events.append("transport_context_entered")
+            return expected_transport
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            events.append("transport_context_exited")
+
+    def fake_configured_streamable_http_transport(received_profile):
+        assert received_profile is profile
+        events.append("transport_context_created")
+        return FakeConfiguredTransportContext()
+
+    class FakeClient:
+        def __init__(self, server) -> None:
+            assert server is expected_transport
+            self.is_connected = False
+            events.append("client_created")
+
+        async def __aenter__(self):
+            self.is_connected = True
+            events.append("client_entered")
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            self.is_connected = False
+            events.append("client_exited")
+
+    async def fake_inspect_mcp(client):
+        assert client.is_connected
+        events.append("inspection")
+        raise expected_failure
+
+    monkeypatch.setattr(
+        application,
+        "configured_streamable_http_transport",
+        fake_configured_streamable_http_transport,
+    )
+    monkeypatch.setattr(
+        application,
+        "Client",
+        FakeClient,
+    )
+    monkeypatch.setattr(
+        application,
+        "inspect_mcp",
+        fake_inspect_mcp,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        await application.inspect_streamable_http_profile(profile)
+
+    assert captured.value is expected_failure
+
+    assert events == [
+        "transport_context_created",
+        "transport_context_entered",
+        "client_created",
+        "client_entered",
+        "inspection",
+        "client_exited",
+        "transport_context_exited",
+    ]

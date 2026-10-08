@@ -1,0 +1,248 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. USER ENVIRONMENT AND COMMAND                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                         PowerShell process
+              MCP_DETAILS_HTTP_TEST_VALUE=
+                    "expected-test-value"
+                               │
+                               ▼
+                      python -m mcp_details
+                         streamable-http
+                  --name "Configured HTTP Demo"
+                  --url "http://127.0.0.1:8765/mcp"
+                  --header-env X-MCP-Details-Test
+                               MCP_DETAILS_HTTP_TEST_VALUE
+                               │
+                               ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 2. ENTRY AND ARGUMENT PROCESSING                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                       _parse_arguments()
+                 argparse parses command line
+                               │
+                               │
+                               │ produces approximately:
+                               │
+                               │ transport="streamable-http"
+                               │ name="Configured HTTP Demo"
+                               │ url="http://127.0.0.1:8765/mcp"
+                               │ header_environment_references=[
+                               │   ["X-MCP-Details-Test",
+                               │    "MCP_DETAILS_HTTP_TEST_VALUE"]
+                               │ ]
+                               ▼
+                    _run_parsed_arguments()
+                routes to Streamable HTTP path
+                               │
+                               │ converts CLI pair into:
+                               │
+                               │ HttpHeaderEnvironmentReference(
+                               │   header_name=
+                               │     "X-MCP-Details-Test",
+                               │   environment_variable=
+                               │     "MCP_DETAILS_HTTP_TEST_VALUE"
+                               │ )
+                               ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 3. PROFILE CREATION                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+              inspect_and_render_streamable_http()
+                creates profile and coordinates
+                         inspection
+                               │
+                               ▼
+              StreamableHttpConnectionProfile
+              ────────────────────────────────
+              display_name=
+                  "Configured HTTP Demo"
+
+              url=
+                  "http://127.0.0.1:8765/mcp"
+
+              header_references=(
+                  HttpHeaderEnvironmentReference(
+                      header_name=
+                          "X-MCP-Details-Test",
+                      environment_variable=
+                          "MCP_DETAILS_HTTP_TEST_VALUE",
+                  ),
+              )
+
+              transport="streamable_http"
+                               │
+                               │
+                               │ IMPORTANT:
+                               │ profile contains the
+                               │ environment-variable NAME,
+                               │ not its resolved value.
+                               ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 4. CONNECTION CONSTRUCTION                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+              inspect_streamable_http_profile()
+                               │
+                               │ sees:
+                               │ header_references is non-empty
+                               ▼
+          configured_streamable_http_transport()
+                               │
+                               │ resolves:
+                               │
+                               │ os.environ.get(
+                               │   "MCP_DETAILS_HTTP_TEST_VALUE"
+                               │ )
+                               ▼
+                      "expected-test-value"
+                               │
+                               │ combines the profile's
+                               │ header name with the
+                               │ resolved runtime value
+                               ▼
+                      resolved_headers
+              ┌────────────────────────────────┐
+              │ {                              │
+              │   "X-MCP-Details-Test":        │
+              │       "expected-test-value"    │
+              │ }                              │
+              └────────────────────────────────┘
+                               │
+                               ▼
+                  create_mcp_http_client(
+                      headers=resolved_headers
+                  )
+                               │
+                               ▼
+                  streamable_http_client(
+                      profile.url,
+                      http_client=http_client
+                  )
+                               │
+                               ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 5. MCP SDK AND SERVER COMMUNICATION                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                       Client(transport)
+                               │
+                               ▼
+                     Real HTTP request
+                               │
+                               │ contains:
+                               │
+                               │ X-MCP-Details-Test:
+                               │     expected-test-value
+                               ▼
+                   Streamable HTTP server
+                    127.0.0.1:8765/mcp
+                               │
+                               ▼
+                  Header-check middleware
+                               │
+                      ┌────────┴────────┐
+                      │                 │
+                    wrong             correct
+                    header             header
+                      │                 │
+                      ▼                 ▼
+                 401 Unauthorized    MCP server
+                                        │
+                                        ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 6. MCP PROTOCOL AND INSPECTION                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                       MCP initialization
+                handshake + capability discovery
+                               │
+                               ▼
+                           inspection
+               collects and organizes server
+                         information
+                               │
+                 ┌─────────────┼─────────────┐
+                 │             │             │
+               tools       resources      prompts
+                               │
+                               │
+                     resource templates
+                               │
+                               ▼
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 7. OUTPUT                                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                        terminal report
+                      render_report(result)
+
+                               │
+                               ▼
+
+                     MCP Inspection Report
+
+                     Configured Target
+                       Name:
+                         Configured HTTP Demo
+                       Transport:
+                         streamable_http
+
+                     Server
+                       Identity:
+                         mcp-details-header-
+                         required-http-test-server
+
+                     ...
+					 
+===============================================================
+
+The STDIO and STREAMABLE HTTP flows diverge at the connection-construction boundary:					 
+------------------------------------------------------------------------------------
+
+                 STDIO                                  STREAMABLE HTTP
+
+environment_variables                         header_references
+("MCP_DETAILS_TEST_VALUE",)                   (
+                                                X-MCP-Details-Test
+                                                    ←
+                                                MCP_DETAILS_HTTP_TEST_VALUE
+                                              )
+          │                                             │
+          ▼                                             ▼
+build_stdio_server_parameters()          configured_streamable_http_transport()
+          │                                             │
+          ▼                                             ▼
+os.environ lookup                        os.environ lookup
+          │                                             │
+          ▼                                             ▼
+StdioServerParameters.env                resolved_headers
+          │                                             │
+          ▼                                             ▼
+MCP SDK starts subprocess                create_mcp_http_client()
+          │                                             │
+          ▼                                             ▼
+variable exists in                       streamable_http_client()
+subprocess environment                                  │
+                                                        ▼
+                                               HTTP request contains
+                                               resolved header
+											   
+											   
+
+
+
+

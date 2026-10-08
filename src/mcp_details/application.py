@@ -2,7 +2,11 @@
 
 from mcp import Client
 
-from mcp_details.connection import build_stdio_server_parameters
+from mcp_details.connection import (
+    build_stdio_server_parameters,
+    configured_streamable_http_transport,
+)
+
 from mcp_details.inspection import inspect_mcp
 from mcp_details.profiles import (
     StdioConnectionProfile,
@@ -52,6 +56,10 @@ async def inspect_streamable_http_profile(
         transport=profile.transport,
     )
 
-    client = Client(profile.url)
+    if not profile.header_references:
+        client = Client(profile.url)
+        return await _inspect_client(client, target)
 
-    return await _inspect_client(client, target)
+    async with configured_streamable_http_transport(profile) as transport:
+        client = Client(transport)
+        return await _inspect_client(client, target)
